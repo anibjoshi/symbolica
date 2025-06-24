@@ -7,13 +7,7 @@ try:
 except ImportError:
     SymbolicaNode = None
 
-try:
-    from .semantic_kernel_hooks import SymbolicaPlugin
-except ImportError:
-    SymbolicaPlugin = None
-
 __all__ = [
     "LLMBridge",
     "SymbolicaNode",
-    "SymbolicaPlugin",
 ] 

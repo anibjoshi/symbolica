@@ -257,53 +257,7 @@ class TestCrossFrameworkCompatibility:
         assert isinstance(parsed_back, dict)
         assert "symbolica_conclusions" in parsed_back
     
-    def test_semantic_kernel_plugin_format(self):
-        """Test output format suitable for Semantic Kernel plugins."""
-        facts = FactStore.from_json({
-            "user_input": "I want to file a claim for $60000",
-            "claim_amount": 60000,
-            "user_verified": True
-        })
-        
-        # Create rule that might be used in SK plugin
-        from symbolica.core.types import Rule, Condition, Conclusion, Fact, OperatorType
-        rule = Rule(
-            id="sk_claim_rule",
-            conditions=[
-                Condition(field="claim_amount", operator=OperatorType.GT, value=50000),
-                Condition(field="user_verified", operator=OperatorType.EQ, value=True)
-            ],
-            conclusions=[
-                Conclusion(
-                    fact=Fact(key="next_action", value="escalate_to_senior_adjuster"),
-                    confidence=0.95,
-                    rule_id="sk_claim_rule",
-                    metadata={
-                        "sk_function": "escalate_claim",
-                        "sk_parameters": {"priority": "high", "amount": 60000}
-                    }
-                )
-            ]
-        )
-        
-        engine = RuleEngine([rule])
-        inference = Inference(engine)
-        result = inference.run(facts)
-        
-        # Format for Semantic Kernel
-        sk_output = {
-            "function_result": {
-                "success": result.success,
-                "action": result.conclusions[0].fact.value if result.conclusions else "no_action",
-                "confidence": result.conclusions[0].confidence if result.conclusions else 0.0,
-                "reasoning": result.trace.get_reasoning_summary(),
-                "metadata": result.conclusions[0].metadata if result.conclusions else {}
-            }
-        }
-        
-        assert sk_output["function_result"]["success"] is True
-        assert sk_output["function_result"]["action"] == "escalate_to_senior_adjuster"
-        assert "sk_function" in sk_output["function_result"]["metadata"]
+
 
 
 class TestPerformanceIntegration:
