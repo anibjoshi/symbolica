@@ -1,0 +1,10 @@
+rule:
+  name: "life insurance missing beneficiary"
+  if:
+    all:
+      - "policy_type = 'life'"
+      - "beneficiary_details = null"
+  then:
+    diagnosis: true
+    tags:
+      - "requires_manual_followup"

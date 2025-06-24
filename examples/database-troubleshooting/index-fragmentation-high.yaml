@@ -1,0 +1,13 @@
+rule:
+  name: "index_fragmentation_high"
+  if:
+    all:
+      - "index_fragmentation_percent > 30"
+      - "index_page_splits_per_sec > 10"
+    any:
+      - "rebuild_operations_pending = true"
+      - "maintenance_window_overdue = true"
+  then:
+    diagnosis: "Index fragmentation is high"
+    confidence: 0.85
+    maintenance_required: true

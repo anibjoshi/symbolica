@@ -1,0 +1,143 @@
+"""Tests for FactStore functionality."""
+
+import pytest
+from datetime import datetime
+from symbolica.core.fact_store import FactStore
+from symbolica.core.types import Fact
+
+
+class TestFactStore:
+    """Test cases for FactStore."""
+    
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.fact_store = FactStore()
+    
+    def test_add_fact(self):
+        """Test adding facts to the store."""
+        fact = self.fact_store.add("test_key", "test_value")
+        
+        assert fact.key == "test_key"
+        assert fact.value == "test_value"
+        assert len(self.fact_store) == 1
+    
+    def test_get_fact(self):
+        """Test retrieving facts by key."""
+        self.fact_store.add("key1", "value1")
+        self.fact_store.add("key2", "value2")
+        
+        facts = self.fact_store.get("key1")
+        assert len(facts) == 1
+        assert facts[0].value == "value1"
+    
+    def test_get_latest_fact(self):
+        """Test getting the most recent fact."""
+        # Add multiple facts with same key
+        self.fact_store.add("key1", "old_value")
+        fact2 = self.fact_store.add("key1", "new_value")
+        
+        latest = self.fact_store.get_latest("key1")
+        assert latest is not None
+        assert latest.value == "new_value"
+    
+    def test_query_facts(self):
+        """Test querying facts with patterns."""
+        self.fact_store.add("server_1_status", "running")
+        self.fact_store.add("server_2_status", "stopped")
+        self.fact_store.add("database_status", "running")
+        
+        # Test wildcard query
+        server_facts = self.fact_store.query("server_*")
+        assert len(server_facts) == 2
+        
+        # Test value query
+        running_facts = self.fact_store.query("value:running")
+        assert len(running_facts) == 2
+    
+    def test_remove_facts(self):
+        """Test removing facts from the store."""
+        self.fact_store.add("key1", "value1")
+        self.fact_store.add("key2", "value2")
+        
+        removed_count = self.fact_store.remove("key1")
+        assert removed_count == 1
+        assert len(self.fact_store) == 1
+        assert "key1" not in self.fact_store
+    
+    def test_clear_facts(self):
+        """Test clearing all facts."""
+        self.fact_store.add("key1", "value1")
+        self.fact_store.add("key2", "value2")
+        
+        self.fact_store.clear()
+        assert len(self.fact_store) == 0
+    
+    def test_serialize_deserialize(self):
+        """Test serialization and deserialization."""
+        self.fact_store.add("key1", "value1", {"tag": "test"})
+        self.fact_store.add("key2", 42)
+        
+        # Serialize
+        data = self.fact_store.serialize()
+        assert "facts" in data
+        assert len(data["facts"]) == 2
+        
+        # Deserialize into new store
+        new_store = FactStore()
+        new_store.deserialize(data)
+        
+        assert len(new_store) == 2
+        assert new_store.get("key1")[0].value == "value1"
+        assert new_store.get("key2")[0].value == 42
+    
+    def test_filter_facts(self):
+        """Test filtering facts by conditions."""
+        self.fact_store.add("server1", "running", {"priority": "high"})
+        self.fact_store.add("server2", "stopped", {"priority": "low"})
+        self.fact_store.add("server3", "running", {"priority": "medium"})
+        
+        # Filter by value
+        running_servers = self.fact_store.filter_facts([
+            {"field": "value", "operator": "==", "value": "running"}
+        ])
+        assert len(running_servers) == 2
+        
+        # Filter by metadata
+        high_priority = self.fact_store.filter_facts([
+            {"field": "metadata.priority", "operator": "==", "value": "high"}
+        ])
+        assert len(high_priority) == 1
+        assert high_priority[0].key == "server1"
+    
+    def test_fact_metadata(self):
+        """Test fact metadata handling."""
+        metadata = {"source": "test", "confidence": 0.9}
+        fact = self.fact_store.add("test_key", "test_value", metadata)
+        
+        assert fact.metadata["source"] == "test"
+        assert fact.metadata["confidence"] == 0.9
+        
+        # Test metadata query
+        test_facts = self.fact_store.query("meta.source:test")
+        assert len(test_facts) == 1
+    
+    def test_fact_confidence(self):
+        """Test fact confidence values."""
+        fact1 = self.fact_store.add("key1", "value1")  # Default confidence
+        assert fact1.confidence == 1.0
+        
+        # Test that confidence validation happens in Fact constructor
+        with pytest.raises(ValueError):
+            Fact(key="invalid", value="test", confidence=1.5)
+    
+    def test_contains_and_iteration(self):
+        """Test __contains__ and __iter__ methods."""
+        self.fact_store.add("key1", "value1")
+        self.fact_store.add("key2", "value2")
+        
+        assert "key1" in self.fact_store
+        assert "key3" not in self.fact_store
+        
+        # Test iteration
+        facts = list(self.fact_store)
+        assert len(facts) == 2 

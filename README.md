@@ -1,99 +1,230 @@
 # Symbolica
 
-**Symbolica** is a symbolic reasoning layer for domain-specialized LLM agents.  
-It helps you encode, evolve, and apply structured logic alongside generative models—so your agents can not only answer questions, but explain *how* they got there.
+A powerful symbolic reasoning engine for LLM agents with natural language explanation capabilities.
 
-> **Status**: Alpha. APIs will evolve. Feedback and contributions are welcome.
+## Features
 
----
+- **Core symbolic reasoning** with FactStore, RuleEngine, and Inference components
+- **Multiple rule formats** supporting JSON, YAML, and specialized troubleshooting syntax
+- **LLM framework integrations** for LangGraph and Semantic Kernel
+- **Natural language explanations** via LLMBridge with fallback support
+- **Flexible backends** (memory, graph, distributed)
+- **Performance analytics** and detailed reasoning traces
 
-## Why Symbolica?
+## Quick Start
 
-Modern LLMs are powerful—but brittle when used in complex, specialized domains.  
-Symbolica complements LLMs by providing a **pluggable logic engine** that can:
-
-- Apply domain-specific rules and heuristics  
-- Accumulate organizational knowledge over time  
-- Provide **transparent reasoning traces** for every inference  
-- Integrate with LangGraph and other agentic frameworks  
-
-It’s not a replacement for LLMs. It’s the reasoning substrate they’re missing.
-
----
-
-## Key Concepts
-
-| Component      | Description |
-|----------------|-------------|
-| `FactStore`    | Holds symbolic facts (structured inputs) |
-| `RuleEngine`   | Applies declarative rules over those facts |
-| `Inference`    | Produces outcomes and step-by-step traces |
-| `LLMBridge`    | Reformulates outputs into natural language |
-| `AgentHooks`   | Pluggable into LangGraph or other runtimes |
-
----
-
-## Getting Started
+### Installation
 
 ```bash
 pip install symbolica
-(Coming soon to PyPI — for now, clone + install locally)
-
-git clone https://github.com/your-org/symbolica.git
-cd symbolica
-pip install -e .
 ```
 
-## Example Usage
+### Basic Usage
 
 ```python
 from symbolica import FactStore, RuleEngine, Inference
 
-# Step 1: Add facts
+# Create facts
 facts = FactStore()
-facts.add("cpu_usage", "high")
-facts.add("lock_wait_time", "elevated")
+facts.add("temperature", 75)
+facts.add("humidity", 80)
 
-# Step 2: Define rules
+# Define rules (can load from files)
 rules = [
-    {
-        "if": ["cpu_usage == high", "lock_wait_time == elevated"],
-        "then": "possible_root_cause = lock contention"
-    }
+    # Rules can be loaded from JSON, YAML, or troubleshooting format
 ]
 
+# Run inference
 engine = RuleEngine(rules)
-result = Inference(engine).run(facts)
+inference = Inference(engine)
+result = inference.run(facts)
 
-# Step 3: View explanation
-print(result.output)
-print(result.trace())
+# Get explanations
+for conclusion in result.conclusions:
+    print(f"Conclusion: {conclusion.fact.value}")
+    print(f"Confidence: {conclusion.confidence}")
 ```
 
-## Planned Features
-JSON/YAML rulepacks
-Basic symbolic reasoning and traceability
-Natural language output via LLM plugin
-LangGraph & Semantic Kernel agent hooks
-Rule suggestion via LLM + logs
-Graph-based inference backend (WIP)
+### Database Troubleshooting Example
 
-## Ideal Use Cases
-Infrastructure diagnostics
-Compliance automation
-Data quality checks
-Clinical/industrial troubleshooting
-Any domain where reasoning > retrieval
-📖 Documentation
+Symbolica includes specialized support for database troubleshooting rules with an intuitive `if/then` syntax:
 
-Coming soon at https://symbolica.dev
-Until then, see examples/ and docs/ folders for usage patterns.
+```yaml
+rule:
+  name: "cpu_saturation_detected"
+  if:
+    all:
+      - "cpu_utilization > 90"
+      - "cpu_wait_time > 20"
+      - "context_switches_per_sec > 5000"
+  then:
+    diagnosis: "CPU saturation detected"
+    confidence: 0.9
+    priority: "critical"
+```
 
-## Contributing
-Contributions are welcome! Please:
-- Open an issue for bugs or ideas
-- Submit PRs against main
-- Join the discussion under Discussions
+```python
+from symbolica.parsers.troubleshooting_parser import load_troubleshooting_rules
+
+# Load rules from folder
+rules, errors = load_troubleshooting_rules("./sample-rules")
+
+# Create facts from metrics
+database_metrics = {
+    "cpu_utilization": 95,
+    "cpu_wait_time": 25,
+    "context_switches_per_sec": 6000,
+}
+
+facts = FactStore()
+for key, value in database_metrics.items():
+    facts.add(key, value)
+
+# Run inference
+engine = RuleEngine(rules)
+inference = Inference(engine)
+result = inference.run(facts)
+
+# Get diagnoses
+for conclusion in result.conclusions:
+    print(f"🏥 {conclusion.fact.value}")
+    print(f"   Confidence: {conclusion.confidence:.0%}")
+    print(f"   Priority: {conclusion.metadata.get('priority', 'normal')}")
+```
+
+## Rule Format Support
+
+### 1. Troubleshooting Rules (YAML)
+
+Perfect for operational monitoring and diagnostics:
+
+```yaml
+rule:
+  name: "rule_name"
+  if:
+    all:
+      - "metric > threshold"
+      - "another_metric < limit"
+    any:
+      - "condition_a == value"
+      - "condition_b != value"
+  then:
+    diagnosis: "Human-readable diagnosis"
+    confidence: 0.85
+    metadata:
+      priority: "high"
+      recommendations:
+        - "Action item 1"
+        - "Action item 2"
+```
+
+Key features:
+- **Separation of logic and output** - `if:` for conditions, `then:` for results
+- **First-class output fields** - `diagnosis` and `confidence` are required
+- **Extensibility** - Additional metadata in `metadata:` block
+- **Logical grouping** - `all:` (AND) and `any:` (OR) constructs
+
+### 2. Standard YAML Rules
+
+```yaml
+rules:
+  - id: "rule_1"
+    conditions:
+      - field: "temperature"
+        operator: ">"
+        value: 100
+    conclusions:
+      - field: "status"
+        value: "overheating"
+```
+
+### 3. JSON Rules
+
+```json
+{
+  "rules": [
+    {
+      "id": "rule_1",
+      "conditions": [
+        {"field": "count", "operator": ">", "value": 10}
+      ],
+      "conclusions": [
+        {"field": "alert", "value": "high_count"}
+      ]
+    }
+  ]
+}
+```
+
+## LLM Framework Integrations
+
+### LangGraph Integration
+
+```python
+from symbolica.bridges.langraph_hooks import SymbolicaNode
+
+# Add to your LangGraph workflow
+def create_workflow():
+    workflow = StateGraph(State)
+    
+    # Add symbolic reasoning node
+    workflow.add_node("reasoning", SymbolicaNode(rules_path="./rules"))
+    
+    return workflow
+```
+
+### Semantic Kernel Integration
+
+```python
+from symbolica.bridges.semantic_kernel_hooks import SymbolicaPlugin
+
+# Add to your Semantic Kernel
+kernel = Kernel()
+kernel.add_plugin(SymbolicaPlugin(rules_path="./rules"), plugin_name="symbolica")
+
+# Use in prompts
+result = await kernel.invoke("symbolica", "evaluate_facts", facts=facts)
+```
+
+## Natural Language Explanations
+
+```python
+from symbolica import LLMBridge
+
+# Configure with your preferred LLM
+llm_bridge = LLMBridge(
+    provider="openai",  # or "anthropic", "azure", etc.
+    api_key="your-api-key"
+)
+
+# Generate explanations
+explanation = llm_bridge.explain_conclusion(conclusion)
+trace_explanation = llm_bridge.explain_reasoning_trace(inference_result.trace)
+```
+
+## Examples
+
+- **Basic Usage**: `examples/basic_usage.py`
+- **Database Troubleshooting**: `examples/database_troubleshooting.py`
+- **Rule Formats**: `examples/sample-rules/`
+
+## Development
+
+```bash
+# Install in development mode
+pip install -e .
+
+# Run tests
+pytest
+
+# Run specific test
+pytest tests/test_troubleshooting_parser.py -v
+```
 
 ## License
-MIT License © 2025 Aniruddha Joshi & Contributors
+
+MIT License - see LICENSE file for details.
+
+## Contributing
+
+Contributions welcome! Please see our contributing guidelines for details.

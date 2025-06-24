@@ -1,0 +1,13 @@
+rule:
+  name: "cache_inefficiency_pattern"
+  if:
+    all:
+      - "cache_miss_ratio > 0.25"
+      - "cache_evictions_per_min > 100"
+    any:
+      - "working_set_size > cache_size * 1.5"
+      - "random_access_pattern = true"
+  then:
+    diagnosis: "Cache inefficiency pattern"
+    confidence: 0.75
+    optimization_needed: true

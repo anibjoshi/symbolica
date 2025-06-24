@@ -1,0 +1,11 @@
+rule:
+  name: "disaster exclusion clause triggered"
+  if:
+    all:
+      - "event_type in ['earthquake', 'flood', 'hurricane']"
+      - "policy_excludes_disasters = true"
+  then:
+    diagnosis: true
+    tags:
+      - "claim_denied"
+      - "policy_exclusion"

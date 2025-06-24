@@ -1,0 +1,10 @@
+rule:
+  name: "foreign income underreported"
+  if:
+    all:
+      - "foreign_assets_disclosed = true"
+      - "foreign_income_reported < 0.8 * bank_reported_foreign_income"
+  then:
+    diagnosis: true
+    tags:
+      - "audit_flag"

@@ -1,0 +1,11 @@
+rule:
+  name: "disk_io_bottleneck"
+  if:
+    all:
+      - "disk_queue_depth > 8"
+      - "avg_disk_response_time > 15"
+      - "disk_utilization > 85"
+  then:
+    diagnosis: "Disk I/O bottleneck"
+    confidence: 0.85
+    impact: "high"

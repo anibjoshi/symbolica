@@ -1,0 +1,9 @@
+rule:
+  name: "child tax credit eligible"
+  if:
+    all:
+      - "number_of_dependents_under_17 >= 1"
+      - "adjusted_gross_income < 200000"
+  then:
+    tax_credit: "child"
+    amount_per_child: 2000

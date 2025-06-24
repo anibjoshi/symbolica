@@ -1,0 +1,14 @@
+rule:
+  name: "lock_contention_detected"
+  if:
+    all:
+      - "lock_wait_time > 5000"
+      - "concurrent_connections > 50"
+      - "deadlock_count > 0"
+  then:
+    diagnosis: "Lock contention detected"
+    confidence: 0.9
+    recommendations:
+      - "Review transaction isolation levels"
+      - "Optimize query execution order"
+      - "Consider connection pooling"

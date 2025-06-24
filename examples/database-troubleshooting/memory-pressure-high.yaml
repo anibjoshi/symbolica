@@ -1,0 +1,12 @@
+rule:
+  name: "memory_pressure_high"
+  if:
+    any:
+      - "page_faults_per_sec > 100"
+      - "available_memory_mb < 512"
+    all:
+      - "cache_hit_ratio < 85"
+  then:
+    diagnosis: "Memory pressure is high"
+    confidence: 0.75
+    severity: "high"

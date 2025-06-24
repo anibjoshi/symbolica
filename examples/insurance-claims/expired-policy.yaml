@@ -1,0 +1,9 @@
+rule:
+  name: "policy expired at claim time"
+  if:
+    all:
+      - "claim_date > policy_expiry_date"
+  then:
+    diagnosis: true
+    tags:
+      - "claim_denied"

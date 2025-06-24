@@ -1,0 +1,10 @@
+rule:
+  name: "claim too soon after policy start"
+  if:
+    all:
+      - "days_since_policy_start < 7"
+      - "claim_type != 'accident'"
+  then:
+    diagnosis: true
+    tags:
+      - "requires_investigation"

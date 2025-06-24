@@ -1,0 +1,10 @@
+rule:
+  name: "police report required but missing"
+  if:
+    all:
+      - "claim_type in ['theft', 'accident']"
+      - "police_report_submitted = false"
+  then:
+    diagnosis: true
+    tags:
+      - "requires_follow_up"

@@ -1,0 +1,9 @@
+rule:
+  name: "foreign income exclusion applicable"
+  if:
+    all:
+      - "foreign_income > 0"
+      - "taxpayer_resided_abroad_days >= 330"
+  then:
+    exclusion_applies: true
+    maximum_exclusion: 120000

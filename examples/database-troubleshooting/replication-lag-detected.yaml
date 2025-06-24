@@ -1,0 +1,13 @@
+rule:
+  name: "replication_lag_detected"
+  if:
+    all:
+      - "replica_lag_seconds > 300"
+      - "master_write_rate > 1000"
+    any:
+      - "network_latency_ms > 50"
+      - "replica_cpu_utilization > 80"
+  then:
+    diagnosis: "Replication lag detected"
+    confidence: 0.8
+    affects_consistency: true

@@ -1,0 +1,13 @@
+rule:
+  name: "slow_query_performance"
+  if:
+    all:
+      - "avg_query_time > 2000"
+      - "slow_query_count > 50"
+    any:
+      - "table_scan_ratio > 0.3"
+      - "sort_operations > 1000"
+  then:
+    diagnosis: "Slow query performance"
+    confidence: 0.8
+    category: "performance"

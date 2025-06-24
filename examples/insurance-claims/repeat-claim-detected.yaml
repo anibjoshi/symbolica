@@ -1,0 +1,12 @@
+rule:
+  name: "repeated claim detected"
+  if:
+    all:
+      - "claimant_previous_claims > 3"
+      - "same_damage_type = true"
+      - "claim_amount > 1000"
+  then:
+    diagnosis: true
+    tags:
+      - "potential_fraud"
+      - "requires_manual_review"

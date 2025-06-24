@@ -1,0 +1,11 @@
+rule:
+  name: "cpu_saturation_detected"
+  if:
+    all:
+      - "cpu_utilization > 90"
+      - "cpu_wait_time > 20"
+      - "context_switches_per_sec > 5000"
+  then:
+    diagnosis: "CPU saturation detected"
+    confidence: 0.9
+    priority: "critical"

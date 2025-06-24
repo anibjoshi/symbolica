@@ -1,0 +1,10 @@
+rule:
+  name: "theft in high-risk area"
+  if:
+    all:
+      - "claim_type = 'theft'"
+      - "incident_location_risk_score > 80"
+  then:
+    diagnosis: true
+    tags:
+      - "requires_investigation"

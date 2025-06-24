@@ -1,0 +1,10 @@
+rule:
+  name: "pre-existing condition exclusion"
+  if:
+    all:
+      - "condition_reported in pre_existing_conditions"
+      - "policy_excludes_pre_existing = true"
+  then:
+    diagnosis: true
+    tags:
+      - "claim_denied"

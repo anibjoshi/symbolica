@@ -1,0 +1,13 @@
+rule:
+  name: "transaction_log_growth_abnormal"
+  if:
+    all:
+      - "log_file_size_mb > log_file_max_mb * 0.8"
+      - "log_growth_rate_mb_per_hour > 100"
+    any:
+      - "uncommitted_transactions > 20"
+      - "log_backup_age_hours > 24"
+  then:
+    diagnosis: "Abnormal transaction log growth"
+    confidence: 0.7
+    requires_action: true

@@ -1,0 +1,9 @@
+rule:
+  name: "eitc eligibility"
+  if:
+    all:
+      - "earned_income < 63000"
+      - "filing_status not in ['married_filing_separately']"
+      - "investment_income < 11000"
+  then:
+    eitc_eligible: true

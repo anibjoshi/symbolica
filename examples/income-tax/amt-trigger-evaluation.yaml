@@ -1,0 +1,8 @@
+rule:
+  name: "amt trigger evaluation"
+  if:
+    all:
+      - "adjusted_gross_income > 250000"
+      - "preference_items_present = true"
+  then:
+    amt_filing_required: true

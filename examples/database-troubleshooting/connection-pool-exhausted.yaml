@@ -1,0 +1,11 @@
+rule:
+  name: "connection_pool_exhausted"
+  if:
+    all:
+      - "active_connections >= max_connections * 0.9"
+      - "connection_queue_length > 10"
+      - "connection_timeout_errors > 5"
+  then:
+    diagnosis: "Connection pool is exhausted"
+    confidence: 0.95
+    urgent: true

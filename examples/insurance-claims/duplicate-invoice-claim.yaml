@@ -1,0 +1,9 @@
+rule:
+  name: "duplicate invoice claim"
+  if:
+    all:
+      - "invoice_id in prior_claimed_invoice_ids"
+  then:
+    diagnosis: true
+    tags:
+      - "claim_rejected"

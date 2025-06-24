@@ -1,0 +1,9 @@
+rule:
+  name: "early retirement withdrawal penalty"
+  if:
+    all:
+      - "distribution_from_retirement_account = true"
+      - "account_holder_age < 59.5"
+  then:
+    penalty_percent: 10
+    penalty_reason: "early withdrawal"

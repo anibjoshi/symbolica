@@ -1,0 +1,8 @@
+rule:
+  name: "long term capital gains applicable"
+  if:
+    all:
+      - "asset_holding_period_days >= 365"
+  then:
+    capital_gains_rate_type: "long_term"
+    preferential_tax_rate_applies: true

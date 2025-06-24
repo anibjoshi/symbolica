@@ -1,0 +1,9 @@
+rule:
+  name: "high-value claim flag"
+  if:
+    all:
+      - "claim_amount > 50000"
+  then:
+    diagnosis: true
+    tags:
+      - "requires_senior_approval"

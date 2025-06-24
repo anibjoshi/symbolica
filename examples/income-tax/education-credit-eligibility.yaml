@@ -1,0 +1,10 @@
+rule:
+  name: "education credit eligibility"
+  if:
+    all:
+      - "qualified_education_expenses > 0"
+      - "student_enrolled_half_time = true"
+      - "adjusted_gross_income < 90000"
+  then:
+    education_credit: "American Opportunity"
+    max_credit_amount: 2500

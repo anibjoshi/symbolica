@@ -1,0 +1,8 @@
+rule:
+  name: "salt deduction capped"
+  if:
+    all:
+      - "state_and_local_tax_paid > 10000"
+      - "filing_status != 'married_filing_separately'"
+  then:
+    salt_deduction_limit: 10000
