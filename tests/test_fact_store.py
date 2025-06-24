@@ -140,4 +140,50 @@ class TestFactStore:
         
         # Test iteration
         facts = list(self.fact_store)
-        assert len(facts) == 2 
+        assert len(facts) == 2
+    
+    def test_from_json_simple(self):
+        """Test creating FactStore from simple JSON."""
+        data = {"name": "John", "age": 30, "active": True}
+        facts = FactStore.from_json(data)
+        
+        assert len(facts) == 3
+        assert facts.get("name")[0].value == "John"
+        assert facts.get("age")[0].value == 30
+        assert facts.get("active")[0].value is True
+    
+    def test_from_json_nested(self):
+        """Test creating FactStore from nested JSON."""
+        data = {
+            "user": {
+                "profile": {
+                    "name": "Alice",
+                    "age": 25
+                },
+                "settings": {
+                    "theme": "dark",
+                    "notifications": True
+                }
+            }
+        }
+        
+        facts = FactStore.from_json(data)
+        
+        assert facts.get("user.profile.name")[0].value == "Alice"
+        assert facts.get("user.profile.age")[0].value == 25
+        assert facts.get("user.settings.theme")[0].value == "dark"
+        assert facts.get("user.settings.notifications")[0].value is True
+    
+    def test_load_json_existing_store(self):
+        """Test loading JSON into existing fact store."""
+        # Add initial facts
+        self.fact_store.add("existing", "value")
+        
+        # Load additional facts from JSON
+        new_data = {"new_key": "new_value", "count": 42}
+        self.fact_store.load_json(new_data)
+        
+        assert len(self.fact_store) == 3
+        assert self.fact_store.get("existing")[0].value == "value"
+        assert self.fact_store.get("new_key")[0].value == "new_value"
+        assert self.fact_store.get("count")[0].value == 42 

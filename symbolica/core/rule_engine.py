@@ -115,11 +115,11 @@ class RuleEngine:
         """Evaluate rules against facts to draw conclusions."""
         start_time = time.time()
         
-        # Clear cache for new evaluation
+        # Clear cache for new evaluation but keep fired combinations to prevent duplicates
         self._condition_cache.clear()
         self._cache_hits = 0
         self._cache_misses = 0
-        self._fired_combinations.clear()
+        self._fired_combinations.clear()  # Clear at start of evaluation
         
         conclusions: List[Conclusion] = []
         all_facts = facts.get_all_facts()
@@ -150,17 +150,18 @@ class RuleEngine:
                 can_fire, _ = self._can_fire_with_details(rule, all_facts)
                 if can_fire:
                     rule_conclusions = self._evaluate_single_rule(rule, all_facts)
-                    new_conclusions.extend(rule_conclusions)
-                    self.stats["total_rules_fired"] += 1
-                    
-                    # Add new facts from conclusions
-                    for conclusion in rule_conclusions:
-                        facts.add(
-                            conclusion.fact.key,
-                            conclusion.fact.value,
-                            conclusion.fact.metadata
-                        )
-                        all_facts.append(conclusion.fact)
+                    if rule_conclusions:  # Only add if there are conclusions
+                        new_conclusions.extend(rule_conclusions)
+                        self.stats["total_rules_fired"] += 1
+                        
+                        # Add new facts from conclusions
+                        for conclusion in rule_conclusions:
+                            facts.add(
+                                conclusion.fact.key,
+                                conclusion.fact.value,
+                                conclusion.fact.metadata
+                            )
+                            all_facts.append(conclusion.fact)
             
             if not new_conclusions:
                 break
@@ -262,8 +263,15 @@ class RuleEngine:
         
         condition_evaluations = []
         
-        # Create a hash of this rule-fact combination to prevent duplicates
-        fact_hash = hash(tuple(sorted((f.key, str(f.value)) for f in facts)))
+        # Create a more specific hash based only on facts that this rule conditions check
+        # This prevents the same rule from firing on the same input conditions
+        relevant_facts = []
+        condition_fields = {cond.field for cond in rule.conditions}
+        for fact in facts:
+            if fact.key in condition_fields:
+                relevant_facts.append((fact.key, str(fact.value)))
+        
+        fact_hash = hash(tuple(sorted(relevant_facts)))
         combination_key = f"{rule.id}:{fact_hash}"
         
         if combination_key in self._fired_combinations:
@@ -476,43 +484,70 @@ class RuleEngine:
     
     def _evaluate_single_rule(self, rule: Rule, facts: List[Fact]) -> List[Conclusion]:
         """Evaluate a single rule against facts."""
-        matching_fact_sets = []
+        # Group conditions by logic type
+        all_conditions = []
+        any_conditions = []
         
         for condition in rule.conditions:
-            matching_facts = []
+            logic_type = condition.metadata.get("logic_type", "all")
+            if logic_type == "all":
+                all_conditions.append(condition)
+            else:
+                any_conditions.append(condition)
+        
+        supporting_facts = []
+        
+        # Handle ALL conditions - all must be satisfied
+        for condition in all_conditions:
+            matching_fact = None
             for fact in facts:
                 if fact.key == condition.field and condition.evaluate(fact):
-                    matching_facts.append(fact)
-            if matching_facts:
-                matching_fact_sets.append(matching_facts[:1])  # Take only first match to prevent combinatorial explosion
+                    matching_fact = fact
+                    break  # Take first matching fact for this condition
+            
+            if matching_fact:
+                supporting_facts.append(matching_fact)
+            else:
+                # If any ALL condition doesn't have a matching fact, rule cannot fire
+                return []
         
-        if not all(matching_fact_sets):
-            return []
+        # Handle ANY conditions - at least one must be satisfied
+        if any_conditions:
+            any_satisfied = False
+            for condition in any_conditions:
+                for fact in facts:
+                    if fact.key == condition.field and condition.evaluate(fact):
+                        supporting_facts.append(fact)
+                        any_satisfied = True
+                        break  # Take first matching fact and stop
+                if any_satisfied:
+                    break  # At least one ANY condition is satisfied
+            
+            if not any_satisfied:
+                # If no ANY condition is satisfied, rule cannot fire
+                return []
         
-        # Generate combinations and create conclusions (simplified to prevent duplicates)
-        import itertools
-        fact_combinations = list(itertools.product(*matching_fact_sets))
-        
+        # Create conclusions based on rule template
         conclusions = []
-        for fact_combo in fact_combinations[:1]:  # Take only first combination to prevent duplicates
-            for conclusion_template in rule.conclusions:
-                min_confidence = min(fact.confidence for fact in fact_combo)
-                conclusion_confidence = min(conclusion_template.confidence, min_confidence)
-                
-                conclusion = Conclusion(
-                    fact=Fact(
-                        key=conclusion_template.fact.key,
-                        value=conclusion_template.fact.value,
-                        metadata=conclusion_template.fact.metadata.copy(),
-                        confidence=conclusion_confidence
-                    ),
-                    confidence=conclusion_confidence,
-                    rule_id=rule.id,
-                    supporting_facts=list(fact_combo),
-                    metadata=conclusion_template.metadata.copy()
-                )
-                
-                conclusions.append(conclusion)
+        min_confidence = min(fact.confidence for fact in supporting_facts) if supporting_facts else 1.0
+        
+        for conclusion_template in rule.conclusions:
+            conclusion_confidence = min(conclusion_template.confidence, min_confidence)
+            
+            conclusion = Conclusion(
+                fact=Fact(
+                    key=conclusion_template.fact.key,
+                    value=conclusion_template.fact.value,
+                    metadata=conclusion_template.fact.metadata.copy(),
+                    confidence=conclusion_confidence
+                ),
+                confidence=conclusion_confidence,
+                rule_id=rule.id,
+                supporting_facts=supporting_facts.copy(),
+                metadata=conclusion_template.metadata.copy()
+            )
+            
+            conclusions.append(conclusion)
         
         return conclusions
     

@@ -70,6 +70,38 @@ class YAMLRuleParser:
         
         return rules
     
+    def parse_rule_file(self, file_path: str) -> List[Rule]:
+        """Parse rules from a single YAML file.
+        
+        Args:
+            file_path: Path to the YAML file to parse
+            
+        Returns:
+            List of parsed Rule objects
+        """
+        self.validation_errors.clear()
+        
+        try:
+            with open(file_path, 'r') as f:
+                content = f.read()
+            
+            return self.parse_rules(content, source_file=file_path)
+            
+        except FileNotFoundError:
+            self.validation_errors.append(ValidationError(
+                rule_id="file_error",
+                error_type="file_not_found",
+                message=f"File not found: {file_path}"
+            ))
+            return []
+        except Exception as e:
+            self.validation_errors.append(ValidationError(
+                rule_id="file_error",
+                error_type="file_read_error",
+                message=f"Error reading file {file_path}: {str(e)}"
+            ))
+            return []
+    
     def parse_rules(self, yaml_data: Union[str, Dict[str, Any]], source_file: Optional[str] = None) -> List[Rule]:
         """Parse rules from YAML data supporting multiple formats.
         
@@ -187,18 +219,31 @@ class YAMLRuleParser:
                 ))
                 return None
             
+            # Extract metadata from rule_data (all fields except the structural ones)
+            rule_metadata = {
+                "name": rule_name,
+                "source_file": source_file or "unknown", 
+                "format": "if_then"
+            }
+            
+            # Add any additional fields from the rule as metadata
+            excluded_fields = {"name", "if", "then", "priority", "enabled", "metadata"}
+            for key, value in rule_data.items():
+                if key not in excluded_fields:
+                    rule_metadata[key] = value
+            
+            # Add explicit metadata if present
+            if "metadata" in rule_data:
+                rule_metadata.update(rule_data["metadata"])
+            
             # Create the rule
             rule = Rule(
                 id=rule_id,
                 conditions=conditions,
                 conclusions=conclusions,
                 priority=rule_data.get("priority", 0),
-                metadata={
-                    "name": rule_name,
-                    "source_file": source_file or "unknown",
-                    "format": "if_then",
-                    **rule_data.get("metadata", {})
-                }
+                enabled=rule_data.get("enabled", True),
+                metadata=rule_metadata
             )
             
             return rule
@@ -308,8 +353,11 @@ class YAMLRuleParser:
     def _parse_condition_string(self, condition_str: str, rule_id: str) -> Optional[Condition]:
         """Parse a condition string like 'cpu_utilization > 90'."""
         try:
-            # Remove quotes if present
-            condition_str = condition_str.strip().strip('"').strip("'")
+            # Remove outer quotes if present
+            condition_str = condition_str.strip()
+            while ((condition_str.startswith('"') and condition_str.endswith('"')) or 
+                   (condition_str.startswith("'") and condition_str.endswith("'"))):
+                condition_str = condition_str[1:-1]
             
             # Try to match different operator patterns
             for op_str, op_type in self.operator_mapping.items():
@@ -392,6 +440,11 @@ class YAMLRuleParser:
         """Convert string value to appropriate Python type."""
         value_str = value_str.strip()
         
+        # Remove quotes if present (handle nested quotes)
+        while ((value_str.startswith('"') and value_str.endswith('"')) or 
+               (value_str.startswith("'") and value_str.endswith("'"))):
+            value_str = value_str[1:-1]
+        
         # Try integer
         try:
             return int(value_str)
@@ -408,11 +461,14 @@ class YAMLRuleParser:
         if value_str.lower() in ['true', 'false']:
             return value_str.lower() == 'true'
         
-        # Remove quotes if present and return as string
-        if value_str.startswith('"') and value_str.endswith('"'):
-            return value_str[1:-1]
-        if value_str.startswith("'") and value_str.endswith("'"):
-            return value_str[1:-1]
+        # Handle list format for 'in' operator
+        if value_str.startswith('[') and value_str.endswith(']'):
+            try:
+                # Parse as list
+                import ast
+                return ast.literal_eval(value_str)
+            except (ValueError, SyntaxError):
+                pass
         
         return value_str
 
