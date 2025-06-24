@@ -1,30 +1,20 @@
-"""Modular types for symbolic reasoning.
-
-This module provides all the core data types used throughout
-the Symbolica symbolic reasoning system, organized into
-focused sub-modules for better maintainability.
-"""
+"""Core types for Symbolica symbolic reasoning engine."""
 
 # Import base types
 from .base_types import (
     Fact,
-    Condition,
     Rule,
-    Conclusion
-)
-
-# Import operator types  
-from .operator_types import (
-    OperatorType,
-    apply_operator,
-    validate_operator_compatibility
+    Condition,
+    Conclusion,
+    OperatorType
 )
 
 # Import inference types
 from .inference_types import (
     InferenceStep,
     ReasoningTrace,
-    InferenceResult
+    InferenceResult,
+    ConditionEvaluation
 )
 
 # Import validation types
@@ -40,19 +30,16 @@ from .validation_types import (
 __all__ = [
     # Base types
     "Fact",
-    "Condition", 
     "Rule",
+    "Condition", 
     "Conclusion",
-    
-    # Operator types
     "OperatorType",
-    "apply_operator",
-    "validate_operator_compatibility",
     
     # Inference types
     "InferenceStep",
     "ReasoningTrace", 
     "InferenceResult",
+    "ConditionEvaluation",
     
     # Validation types
     "ValidationError",

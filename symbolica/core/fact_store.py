@@ -21,6 +21,77 @@ class FactStore:
         self._all_facts: List[Fact] = []
         self._fact_count = 0
     
+    @classmethod
+    def from_json(cls, data: Union[str, Dict[str, Any]]) -> 'FactStore':
+        """Create a FactStore from JSON data.
+        
+        This is the primary method for LLMs to load data into Symbolica.
+        
+        Args:
+            data: JSON string or dictionary containing the data
+            
+        Returns:
+            FactStore instance populated with facts from the JSON
+            
+        Example:
+            # From dict
+            facts = FactStore.from_json({
+                "claim_amount": 75000,
+                "policy_active": True,
+                "claim_type": "theft"
+            })
+            
+            # From JSON string
+            facts = FactStore.from_json('{"claim_amount": 75000, "policy_active": true}')
+        """
+        fact_store = cls()
+        
+        # Parse JSON string if needed
+        if isinstance(data, str):
+            data = json.loads(data)
+        
+        # Convert all key-value pairs to facts
+        fact_store._load_dict_as_facts(data)
+        
+        return fact_store
+    
+    def _load_dict_as_facts(self, data: Dict[str, Any], prefix: str = "") -> None:
+        """Recursively load a dictionary as facts.
+        
+        Args:
+            data: Dictionary to load
+            prefix: Prefix for nested keys
+        """
+        for key, value in data.items():
+            full_key = f"{prefix}{key}" if prefix else key
+            
+            if isinstance(value, dict):
+                # Recursively handle nested objects
+                self._load_dict_as_facts(value, f"{full_key}.")
+            elif isinstance(value, list):
+                # Handle arrays by creating indexed facts
+                for i, item in enumerate(value):
+                    if isinstance(item, dict):
+                        self._load_dict_as_facts(item, f"{full_key}[{i}].")
+                    else:
+                        self.add(f"{full_key}[{i}]", item)
+                # Also add the array length
+                self.add(f"{full_key}.length", len(value))
+            else:
+                # Simple key-value pair
+                self.add(full_key, value)
+
+    def load_json(self, data: Union[str, Dict[str, Any]]) -> None:
+        """Load JSON data into the existing fact store.
+        
+        Args:
+            data: JSON string or dictionary to load
+        """
+        if isinstance(data, str):
+            data = json.loads(data)
+        
+        self._load_dict_as_facts(data)
+    
     def add(self, key: str, value: Any, metadata: Optional[Dict[str, Any]] = None) -> Fact:
         """Add a fact to the store.
         

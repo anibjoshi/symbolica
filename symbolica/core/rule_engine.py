@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional, Set, Tuple
 from collections import defaultdict
 
-from .types import Rule, Fact, Conclusion, ValidationError, ReasoningTrace, InferenceStep
+from .types import Rule, Fact, Conclusion, ValidationError, ReasoningTrace, InferenceStep, ConditionEvaluation
 from .fact_store import FactStore
 
 
@@ -44,6 +44,9 @@ class RuleEngine:
         self._condition_cache: Dict[str, bool] = {}
         self._cache_hits = 0
         self._cache_misses = 0
+        
+        # Track which rule-fact combinations have already fired
+        self._fired_combinations: Set[str] = set()
         
         # Statistics
         self.stats = {
@@ -116,6 +119,7 @@ class RuleEngine:
         self._condition_cache.clear()
         self._cache_hits = 0
         self._cache_misses = 0
+        self._fired_combinations.clear()
         
         conclusions: List[Conclusion] = []
         all_facts = facts.get_all_facts()
@@ -143,7 +147,8 @@ class RuleEngine:
             
             # Evaluate relevant rules
             for rule in relevant_rules:
-                if self._can_fire_optimized(rule, all_facts):
+                can_fire, _ = self._can_fire_with_details(rule, all_facts)
+                if can_fire:
                     rule_conclusions = self._evaluate_single_rule(rule, all_facts)
                     new_conclusions.extend(rule_conclusions)
                     self.stats["total_rules_fired"] += 1
@@ -178,7 +183,9 @@ class RuleEngine:
         iteration = 0
         step_number = 0
         
+        # Clear state for new evaluation
         self._condition_cache.clear()
+        self._fired_combinations.clear()
         
         while iteration < max_iterations:
             iteration += 1
@@ -197,26 +204,34 @@ class RuleEngine:
             for rule in relevant_rules:
                 start_time = time.time()
                 
-                if self._can_fire_optimized(rule, all_facts):
+                # Check if rule can fire and get detailed evaluation
+                can_fire, condition_evaluations = self._can_fire_with_details(rule, all_facts)
+                
+                if can_fire:
                     rule_conclusions = self._evaluate_single_rule(rule, all_facts)
                     
                     if rule_conclusions:
                         step_number += 1
                         execution_time = (time.time() - start_time) * 1000
                         
-                        # Find matching facts for trace
+                        # Find specific matching facts
                         matching_facts = []
-                        for condition in rule.conditions:
-                            for fact in all_facts:
-                                if condition.field == fact.key and condition.evaluate(fact):
-                                    matching_facts.append(fact)
-                                    break
+                        for eval in condition_evaluations:
+                            if eval.result:
+                                matching_facts.append(eval.fact_matched)
+                        
+                        # Create detailed reasoning explanation
+                        reasoning_explanation = self._create_reasoning_explanation(
+                            rule, condition_evaluations, rule_conclusions
+                        )
                         
                         step = InferenceStep(
                             step_number=step_number,
                             rule_applied=rule,
                             facts_matched=matching_facts,
                             conclusions_drawn=rule_conclusions,
+                            condition_evaluations=condition_evaluations,
+                            reasoning_explanation=reasoning_explanation,
                             execution_time_ms=execution_time
                         )
                         
@@ -239,6 +254,165 @@ class RuleEngine:
         
         trace.finalize(conclusions)
         return conclusions, trace
+    
+    def _can_fire_with_details(self, rule: Rule, facts: List[Fact]) -> Tuple[bool, List[ConditionEvaluation]]:
+        """Check if rule can fire and return detailed condition evaluations."""
+        if not rule.enabled:
+            return False, []
+        
+        condition_evaluations = []
+        
+        # Create a hash of this rule-fact combination to prevent duplicates
+        fact_hash = hash(tuple(sorted((f.key, str(f.value)) for f in facts)))
+        combination_key = f"{rule.id}:{fact_hash}"
+        
+        if combination_key in self._fired_combinations:
+            return False, []
+        
+        # Group conditions by logic type
+        all_conditions = []
+        any_conditions = []
+        
+        for condition in rule.conditions:
+            logic_type = condition.metadata.get("logic_type", "all")
+            if logic_type == "all":
+                all_conditions.append(condition)
+            else:
+                any_conditions.append(condition)
+        
+        # Evaluate ALL conditions
+        all_satisfied = True
+        if all_conditions:
+            for condition in all_conditions:
+                condition_satisfied = False
+                matched_fact = None
+                
+                for fact in facts:
+                    if condition.field == fact.key:
+                        # Check cache first
+                        cache_key = f"{condition.field}|{condition.operator.value}|{condition.value}|{fact.value}"
+                        if cache_key in self._condition_cache:
+                            result = self._condition_cache[cache_key]
+                            self._cache_hits += 1
+                        else:
+                            result = condition.evaluate(fact)
+                            self._condition_cache[cache_key] = result
+                            self._cache_misses += 1
+                        
+                        # Create condition evaluation
+                        evaluation = ConditionEvaluation(
+                            condition_text=f"{condition.field} {condition.operator.value} {condition.value}",
+                            fact_matched=fact,
+                            operator=condition.operator.value,
+                            expected_value=condition.value,
+                            actual_value=fact.value,
+                            result=result,
+                            explanation=self._create_condition_explanation(condition, fact, result)
+                        )
+                        condition_evaluations.append(evaluation)
+                        
+                        if result:
+                            condition_satisfied = True
+                            matched_fact = fact
+                            break
+                
+                if not condition_satisfied:
+                    all_satisfied = False
+                    break
+        
+        # Evaluate ANY conditions
+        any_satisfied = True
+        if any_conditions:
+            any_satisfied = False
+            for condition in any_conditions:
+                for fact in facts:
+                    if condition.field == fact.key:
+                        cache_key = f"{condition.field}|{condition.operator.value}|{condition.value}|{fact.value}"
+                        if cache_key in self._condition_cache:
+                            result = self._condition_cache[cache_key]
+                            self._cache_hits += 1
+                        else:
+                            result = condition.evaluate(fact)
+                            self._condition_cache[cache_key] = result
+                            self._cache_misses += 1
+                        
+                        evaluation = ConditionEvaluation(
+                            condition_text=f"{condition.field} {condition.operator.value} {condition.value}",
+                            fact_matched=fact,
+                            operator=condition.operator.value,
+                            expected_value=condition.value,
+                            actual_value=fact.value,
+                            result=result,
+                            explanation=self._create_condition_explanation(condition, fact, result)
+                        )
+                        condition_evaluations.append(evaluation)
+                        
+                        if result:
+                            any_satisfied = True
+                            break
+                if any_satisfied:
+                    break
+        
+        can_fire = all_satisfied and any_satisfied
+        
+        # Mark this combination as fired if successful
+        if can_fire:
+            self._fired_combinations.add(combination_key)
+        
+        return can_fire, condition_evaluations
+    
+    def _create_condition_explanation(self, condition, fact: Fact, result: bool) -> str:
+        """Create a human-readable explanation for a condition evaluation."""
+        operator_explanations = {
+            "==": "equals",
+            "!=": "does not equal", 
+            ">": "is greater than",
+            "<": "is less than",
+            ">=": "is greater than or equal to",
+            "<=": "is less than or equal to",
+            "in": "is in",
+            "contains": "contains"
+        }
+        
+        operator_text = operator_explanations.get(condition.operator.value, condition.operator.value)
+        
+        if result:
+            return f"✓ {fact.key} ({fact.value}) {operator_text} {condition.value} - SATISFIED"
+        else:
+            return f"✗ {fact.key} ({fact.value}) {operator_text} {condition.value} - NOT SATISFIED"
+    
+    def _create_reasoning_explanation(self, rule: Rule, evaluations: List[ConditionEvaluation], 
+                                    conclusions: List[Conclusion]) -> str:
+        """Create a detailed reasoning explanation for a rule application."""
+        rule_name = rule.metadata.get("name", rule.id)
+        
+        explanation_parts = [
+            f"Applied rule: '{rule_name}'"
+        ]
+        
+        # Explain condition evaluations
+        satisfied_conditions = [e for e in evaluations if e.result]
+        if satisfied_conditions:
+            explanation_parts.append("Conditions satisfied:")
+            for eval in satisfied_conditions:
+                explanation_parts.append(f"  {eval.explanation}")
+        
+        # Explain conclusions
+        if conclusions:
+            explanation_parts.append("Therefore concluded:")
+            for conclusion in conclusions:
+                confidence_text = f" (confidence: {conclusion.confidence:.0%})" if conclusion.confidence < 1.0 else ""
+                explanation_parts.append(f"  • {conclusion.fact.key} = {conclusion.fact.value}{confidence_text}")
+                
+                # Add metadata explanations
+                if conclusion.metadata.get('tags'):
+                    tags = conclusion.metadata['tags']
+                    if isinstance(tags, list):
+                        explanation_parts.append(f"    Actions required: {', '.join(tags)}")
+                    else:
+                        explanation_parts.append(f"    Action required: {tags}")
+        
+        return "\n".join(explanation_parts)
     
     def validate_rules(self) -> List[ValidationError]:
         """Validate all rules in the engine."""
@@ -289,7 +463,7 @@ class RuleEngine:
             "cache_hit_rate": self._cache_hits / total_cache_ops if total_cache_ops > 0 else 0,
             "avg_execution_time_ms": self.stats["total_execution_time_ms"] / self.stats["total_evaluations"] if self.stats["total_evaluations"] > 0 else 0,
             "skip_rate": self.stats["total_rules_skipped"] / (self.stats["total_rules_fired"] + self.stats["total_rules_skipped"]) if (self.stats["total_rules_fired"] + self.stats["total_rules_skipped"]) > 0 else 0,
-            "optimization_features": ["rule_indexing", "condition_caching", "fact_driven_evaluation"]
+            "optimization_features": ["rule_indexing", "condition_caching", "fact_driven_evaluation", "duplicate_prevention"]
         }
     
     def clear(self) -> None:
@@ -298,71 +472,7 @@ class RuleEngine:
         self._rule_dict.clear()
         self._fact_to_rules.clear()
         self._condition_cache.clear()
-    
-    def _can_fire_optimized(self, rule: Rule, facts: List[Fact]) -> bool:
-        """Check if rule can fire with caching optimization."""
-        if not rule.enabled:
-            return False
-        
-        # Group conditions by logic type
-        all_conditions = []
-        any_conditions = []
-        
-        for condition in rule.conditions:
-            logic_type = condition.metadata.get("logic_type", "all")
-            if logic_type == "all":
-                all_conditions.append(condition)
-            else:
-                any_conditions.append(condition)
-        
-        # Evaluate ALL conditions (short-circuit on failure)
-        if all_conditions:
-            for condition in all_conditions:
-                condition_matched = False
-                for fact in facts:
-                    if condition.field == fact.key:
-                        # Check cache first (optimization)
-                        cache_key = f"{condition.field}|{condition.operator.value}|{condition.value}|{fact.value}"
-                        if cache_key in self._condition_cache:
-                            result = self._condition_cache[cache_key]
-                            self._cache_hits += 1
-                        else:
-                            result = condition.evaluate(fact)
-                            self._condition_cache[cache_key] = result
-                            self._cache_misses += 1
-                        
-                        if result:
-                            condition_matched = True
-                            break
-                
-                if not condition_matched:
-                    return False  # Short-circuit
-        
-        # Evaluate ANY conditions (short-circuit on success)
-        if any_conditions:
-            any_matched = False
-            for condition in any_conditions:
-                for fact in facts:
-                    if condition.field == fact.key:
-                        cache_key = f"{condition.field}|{condition.operator.value}|{condition.value}|{fact.value}"
-                        if cache_key in self._condition_cache:
-                            result = self._condition_cache[cache_key]
-                            self._cache_hits += 1
-                        else:
-                            result = condition.evaluate(fact)
-                            self._condition_cache[cache_key] = result
-                            self._cache_misses += 1
-                        
-                        if result:
-                            any_matched = True
-                            break
-                if any_matched:
-                    break
-            
-            if not any_matched:
-                return False
-        
-        return True
+        self._fired_combinations.clear()
     
     def _evaluate_single_rule(self, rule: Rule, facts: List[Fact]) -> List[Conclusion]:
         """Evaluate a single rule against facts."""
@@ -373,17 +483,18 @@ class RuleEngine:
             for fact in facts:
                 if fact.key == condition.field and condition.evaluate(fact):
                     matching_facts.append(fact)
-            matching_fact_sets.append(matching_facts)
+            if matching_facts:
+                matching_fact_sets.append(matching_facts[:1])  # Take only first match to prevent combinatorial explosion
         
         if not all(matching_fact_sets):
             return []
         
-        # Generate combinations and create conclusions
+        # Generate combinations and create conclusions (simplified to prevent duplicates)
         import itertools
         fact_combinations = list(itertools.product(*matching_fact_sets))
         
         conclusions = []
-        for fact_combo in fact_combinations:
+        for fact_combo in fact_combinations[:1]:  # Take only first combination to prevent duplicates
             for conclusion_template in rule.conclusions:
                 min_confidence = min(fact.confidence for fact in fact_combo)
                 conclusion_confidence = min(conclusion_template.confidence, min_confidence)

@@ -1,153 +1,91 @@
 #!/usr/bin/env python3
 """
-Basic usage example for Symbolica.
+Basic Symbolica Usage Example - JSON-based for LLM Agents
 
-This example demonstrates:
-- Creating facts and rules
-- Running inference
-- Getting explanations
+Shows how LLM agents can interact with Symbolica using JSON:
+1. Load rules from YAML files
+2. Pass data as JSON to create facts
+3. Get structured JSON output with detailed reasoning trace
 """
 
-from symbolica import (
-    FactStore, RuleEngine, Inference, LLMBridge,
-    Fact, Rule, Condition, Conclusion, OperatorType
-)
+import json
+from symbolica import FactStore, RuleEngine, Inference
+from symbolica.parsers.yaml_parser import YAMLRuleParser
 
 
 def main():
-    """Run the basic usage example."""
-    print("🔬 Symbolica Basic Usage Example")
-    print("=" * 40)
+    # Load rules from insurance claims folder
+    parser = YAMLRuleParser()
+    rules = parser.parse_rules_from_folder("examples/insurance-claims")
     
-    # 1. Create a fact store and add some facts
-    print("\n1. Setting up facts...")
-    facts = FactStore()
+    # Create facts from JSON data (how LLMs will typically interact)
+    claim_data = {
+        "claim_amount": 75000,
+        "days_since_policy_start": 17,
+        "police_report_filed": False,
+        "prior_claims_count": 3,
+        "claim_type": "theft",
+        "location": "high_crime_area",
+        "policy_active": True,
+        "invoice_id": "INV-2024-001",
+        "prior_claimed_invoice_ids": ["INV-2023-999"]
+    }
     
-    facts.add("server_1_status", "down")
-    facts.add("server_1_type", "web_server")
-    facts.add("server_2_status", "running")
-    facts.add("server_2_type", "database")
-    facts.add("network_latency", 250)  # milliseconds
-    
-    print(f"Added {len(facts)} facts to the store")
-    
-    # 2. Create some rules
-    print("\n2. Creating rules...")
-    
-    # Rule 1: If a server is down, generate a high severity alert
-    rule1 = Rule(
-        id="server_down_alert",
-        conditions=[
-            Condition(field="key", operator=OperatorType.CONTAINS, value="status"),
-            Condition(field="value", operator=OperatorType.EQ, value="down")
-        ],
-        conclusions=[
-            Conclusion(
-                fact=Fact(key="alert_severity", value="high"),
-                confidence=0.9,
-                rule_id="server_down_alert"
-            )
-        ],
-        priority=10
-    )
-    
-    # Rule 2: If network latency is high, generate a medium severity alert
-    rule2 = Rule(
-        id="high_latency_alert",
-        conditions=[
-            Condition(field="key", operator=OperatorType.EQ, value="network_latency"),
-            Condition(field="value", operator=OperatorType.GT, value=200)
-        ],
-        conclusions=[
-            Conclusion(
-                fact=Fact(key="alert_severity", value="medium"),
-                confidence=0.7,
-                rule_id="high_latency_alert"
-            )
-        ],
-        priority=5
-    )
-    
-    # Rule 3: If we have a high severity alert, we need immediate action
-    rule3 = Rule(
-        id="immediate_action_required",
-        conditions=[
-            Condition(field="key", operator=OperatorType.EQ, value="alert_severity"),
-            Condition(field="value", operator=OperatorType.EQ, value="high")
-        ],
-        conclusions=[
-            Conclusion(
-                fact=Fact(key="action_required", value="immediate"),
-                confidence=1.0,
-                rule_id="immediate_action_required"
-            )
-        ],
-        priority=15
-    )
-    
-    print(f"Created {3} rules")
-    
-    # 3. Create rule engine and add rules
-    print("\n3. Setting up rule engine...")
-    engine = RuleEngine([rule1, rule2, rule3])
-    
-    # Validate rules
-    errors = engine.validate_rules()
-    if errors:
-        print(f"⚠️  Found {len(errors)} validation errors:")
-        for error in errors:
-            print(f"   - {error}")
-    else:
-        print("✅ All rules are valid")
-    
-    # 4. Create inference engine
-    print("\n4. Running inference...")
-    inference = Inference(engine)
+    facts = FactStore.from_json(claim_data)
     
     # Run inference
+    engine = RuleEngine(rules)
+    inference = Inference(engine)
     result = inference.run(facts)
     
-    print(f"🧠 Inference completed in {result.execution_time_ms:.2f}ms")
-    print(f"📊 Processed {result.facts_processed} facts")
-    print(f"🔥 Fired {result.rules_fired} rules")
-    print(f"💡 Drew {len(result.conclusions)} conclusions")
+    # Get structured JSON output with detailed reasoning
+    output = result.to_dict()
     
-    # 5. Display conclusions
-    print("\n5. Conclusions:")
-    for i, conclusion in enumerate(result.conclusions, 1):
-        print(f"   {i}. {conclusion.fact.key} = {conclusion.fact.value}")
-        print(f"      Confidence: {conclusion.confidence:.0%}")
-        print(f"      From rule: {conclusion.rule_id}")
-        print()
+    # Print key results
+    print(f"Success: {output['success']}")
+    print(f"Rules fired: {output['performance']['rules_fired']}")
+    print(f"Unique conclusions: {len(output['unique_conclusions'])}")
     
-    # 6. Show reasoning trace
-    print("6. Reasoning trace:")
-    explanation = inference.explain_trace()
-    print(explanation)
+    # Print conclusions with reasoning
+    print("\n=== CONCLUSIONS ===")
+    for conclusion in output['unique_conclusions']:
+        print(f"• {conclusion['key']}: {conclusion['value']}")
+        if conclusion['metadata'].get('tags'):
+            print(f"  Actions: {conclusion['metadata']['tags']}")
     
-    # 7. Demonstrate LLM bridge (without actual LLM)
-    print("\n7. Natural language explanation:")
-    llm_bridge = LLMBridge()  # No LLM client, will use fallback
+    # Show detailed reasoning trace
+    print("\n=== REASONING TRACE ===")
+    if 'reasoning_trace' in output:
+        print(output['reasoning_trace']['summary'])
+        print("\nDetailed steps:")
+        for step in output['reasoning_trace']['steps']:
+            print(f"\nStep {step['step_number']}:")
+            print(f"Rule: {step['rule_applied']['name']}")
+            
+            # Show condition evaluations
+            if step['condition_evaluations']:
+                print("Condition evaluations:")
+                for eval in step['condition_evaluations']:
+                    print(f"  {eval['explanation']}")
+            
+            # Show conclusions from this step
+            if step['conclusions_drawn']:
+                print("Conclusions:")
+                for conclusion in step['conclusions_drawn']:
+                    print(f"  • {conclusion['key']}: {conclusion['value']}")
     
-    if result.conclusions:
-        nl_explanation = llm_bridge.explain_conclusion(result.conclusions[0])
-        print(nl_explanation)
-    
-    # 8. Query facts
-    print("\n8. Querying facts:")
-    server_facts = facts.query("server_*")
-    print(f"Found {len(server_facts)} server-related facts:")
-    for fact in server_facts:
-        print(f"   - {fact.key} = {fact.value}")
-    
-    # 9. Performance analysis
-    print("\n9. Performance analysis:")
-    perf_metrics = inference.analyze_performance()
-    print(f"   - Total steps: {perf_metrics['total_steps']}")
-    print(f"   - Average step time: {perf_metrics['avg_step_time_ms']:.2f}ms")
-    print(f"   - Conclusions per step: {perf_metrics['conclusions_per_step']:.1f}")
-    
-    print("\n✨ Example completed!")
+    # Show compact JSON output for LLMs
+    print("\n=== JSON OUTPUT FOR LLM ===")
+    compact_output = {
+        "success": output["success"],
+        "conclusions": output["unique_conclusions"],
+        "reasoning": output["reasoning_trace"]["summary"] if "reasoning_trace" in output else "No reasoning available",
+        "performance": {
+            "rules_fired": output["performance"]["rules_fired"],
+            "execution_time_ms": output["performance"]["total_execution_time_ms"]
+        }
+    }
+    print(json.dumps(compact_output, indent=2))
 
 
 if __name__ == "__main__":
