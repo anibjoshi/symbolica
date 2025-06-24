@@ -2,7 +2,6 @@
 
 from .fact_store import FactStore
 from .rule_engine import RuleEngine
-from .optimized_rule_engine import OptimizedRuleEngine
 from .inference import Inference
 from .types import (
     Fact,
@@ -24,7 +23,6 @@ __all__ = [
     # Core engines and stores
     "FactStore",
     "RuleEngine",
-    "OptimizedRuleEngine",
     "Inference",
     
     # Base types
