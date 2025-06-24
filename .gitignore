@@ -220,7 +220,6 @@ examples/output/
 examples/temp/
 examples/*.log
 examples/benchmark_*.md
-examples/SCALABILITY_RESULTS.md
 
 # Machine learning / AI model artifacts (future-proofing)
 models/
