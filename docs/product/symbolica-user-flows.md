@@ -166,7 +166,8 @@ prose — is the feedback payload.
 | `UNREACHABLE_RULE` / `AFTER_CYCLE` | Re-derive the `after` chain from the dependency the cases actually show |
 | `EMIT_NOT_ALLOWED` | Out of capability scope — drop the emit; flag for governor if the scope itself seems wrong |
 | Simulation: low precision on one rule | Tighten with a guard from the failing cases' distinguishing facts; don't lower priority to "hide" it |
-| Simulation: coverage delta ≈ 0 | The candidate restates existing coverage — distill from *uncovered* cases only |
+| Simulation: coverage delta ≈ 0 | The candidate restates existing coverage — distill from the largest *uncovered-case cluster* (FR-14.10), not from already-covered territory |
+| `NEAR_DUPLICATE_RULE` (FR-14.9) | A semantically similar rule already exists — amend it instead of adding a twin; twins drift apart and create future emit conflicts |
 
 Round-trip budget exhausted (>3) → the loop layer escalates: the case batch is marked
 undistillable and surfaces to the governor rather than looping forever.
@@ -196,8 +197,12 @@ run (FR-14.7, P2).
 **Audit** ("why did the system do X on June 3?"): look up the `decision_id` → the trace
 shows fired rules, field values, and per-`PROMPT()` records → **replay** the run with
 LLM leaves served from the trace cache to reproduce it exactly → provenance links each
-fired rule to the cases it was distilled from and who approved it. The chain
-*decision → rules → cases → approval* is complete and tamper-evident.
+fired rule to the cases it was distilled from and who approved it. For surrounding
+context, open a **time-travel snapshot** (`db.at(decision_timestamp)`, read-only) to
+see the ruleset, case store, and telemetry exactly as they were; "what changed between
+Tuesday and Thursday" is a diff of two snapshots. The chain
+*decision → rules → cases → approval* is complete and tamper-evident (the audit log is
+natively hash-chained).
 
 ### 3.3 Troubleshooting
 

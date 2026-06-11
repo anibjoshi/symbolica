@@ -39,10 +39,10 @@ response to v1's unsubstantiated "6,000+ executions/second" claim.
 |---|---|---|---|
 | NFR-2.1 | P0 | Thread safety: concurrent `reason()` on one engine from any thread (incl. non-main) yields results identical to sequential execution. No `signal`, no thread-affine or main-thread-only constructs anywhere in the engine | Dedicated stress test: N threads × M runs, byte-compare serialized results vs sequential; named regression for v1 bug #7 |
 | NFR-2.2 | P0 | Platforms: Linux, macOS, Windows; CPython 3.10–3.13. No platform-conditional *semantics* (a feature either works identically everywhere or does not exist) | Full CI matrix (3 OS × 4 Python); conformance suite must pass on every cell |
-| NFR-2.3 | P0 | Dependencies: core = stdlib + `jsonschema` only. L1 provider SDKs and YAML rendering are extras. Transitive dependency tree of core ≤ 5 packages | CI check: fresh-venv install + `pip list` assertion |
+| NFR-2.3 | P0 | Dependencies: core = stdlib + `jsonschema` + `stratadb` (the data layer, FR-10.9). L1 provider SDKs and YAML rendering are extras. Transitive dependency tree of core ≤ 8 packages. The evaluation path (`expr`/`runtime`) performs no storage I/O regardless (AD-14) | CI check: fresh-venv install + `pip list` assertion; import-linter rule banning `storage`/`stratadb` imports in `expr`/`runtime` |
 | NFR-2.4 | P0 | Sandboxing: no `eval`/`exec`/`compile`-of-user-strings; AST whitelist at compile time; expressions cannot perform I/O, imports, attribute access on non-fact objects, or reach Python builtins; per-expression and per-run resource limits per FR-6.6 | Security conformance suite: corpus of hostile expressions (imports, dunders, comprehension smuggling, deep nesting, gigantic literals) must all yield compile-time diagnostics; fuzzing per NFR-6.2 |
 | NFR-2.5 | P0 | Resource exhaustion safety: adversarial-but-schema-valid rulesets (max-size expressions, max rules, pathological `after` graphs, deep condition trees) cannot exceed 2× the deadline or unbounded memory | Property tests generating adversarial rulesets at the documented limits |
-| NFR-2.6 | P1 | Supply chain: Dependabot enabled; release artifacts built in CI from tagged commits only; wheel is pure-Python | Repo config + release workflow review |
+| NFR-2.6 | P1 | Supply chain: Dependabot enabled; release artifacts built in CI from tagged commits only; the `symbolica` wheel is pure-Python (`stratadb` ships prebuilt native wheels; installability verified on every CI matrix cell) | Repo config + release workflow review + matrix install check |
 | NFR-2.7 | P1 | Parallelism guidance is honest: docs state that pure-Python evaluation is GIL-bound — scale-out is via processes (engines pickle/rebuild cheaply) or threads only for L1 I/O concurrency | Doc review + pickling round-trip test |
 
 ## NFR-3 — Engineering Quality
@@ -75,7 +75,7 @@ The product's core claim; verified, not asserted.
 | NFR-5.1 | P0 | Bit-stable results: identical (ruleset revision, facts, function registry) ⇒ identical serialized `verdict`, `fired`, `diagnostics` across runs, threads, processes, OSes, and supported Python versions | CI determinism job: run conformance corpus on every matrix cell, compare result-corpus hash across all cells |
 | NFR-5.2 | P0 | No ambient nondeterminism in the engine: no wall-clock reads affecting results (deadline uses injected/monotonic clock; `decision_id` and timestamps live only in trace metadata, never in verdict-affecting paths), no RNG, no dict-iteration-order dependence (all orderings explicit), no env-var behavior switches | Code-review checklist + grep-based CI lint (`time.time`, `random`, `os.environ` banned in core paths) + NFR-5.1 catches violations |
 | NFR-5.3 | P1 | Replay fidelity (L1): a replayed run consumes external-call results exclusively from the recorded trace; cache miss during replay is a hard, identifying error — never a silent live call | L1 conformance: record run, replay with a poisoned/absent provider, byte-compare results |
-| NFR-5.4 | P0 | Effective-config transparency: every limit and default in play (`max_passes`, deadline, limits, allowlist, ruleset revision, engine version) is readable on the engine and stamped into the trace, so any result is reconstructible from its trace alone | Trace-content conformance test |
+| NFR-5.4 | P0 | Effective-config transparency: every limit and default in play (`max_passes`, deadline, limits, allowlist, ruleset revision, engine version) is readable on the engine and stamped into the trace, so any result is reconstructible from its trace alone; the data layer's time-travel snapshots (`db.at(t)`, AD-20) additionally reconstruct the full surrounding state (ruleset, cases, telemetry) at the decision's timestamp | Trace-content conformance test + loop audit test |
 
 ## NFR-6 — Reliability & Failure Behavior
 
@@ -99,8 +99,9 @@ from user-controlled conversations); the host process is trusted.
 | NFR-7.2 | P0 | Capability containment: `emit_allowlist` is enforced in the engine's execution path; no configuration of the loop layer can widen what rules may emit | Conformance + a test that drives the loop with a hostile authoring model emitting out-of-scope rules |
 | NFR-7.3 | P1 | Prompt-injection resistance (L1): facts interpolated into `PROMPT()` templates are sanitized/delimited; injection attempts in fact values cannot alter the template's instructions; typed-output parsing never executes response content | L1 red-team corpus (carried over from v1's test ideas, rebuilt) |
 | NFR-7.4 | P1 | Trace hygiene: at `standard` level, traces store the `PROMPT()` template id + rendered-prompt **hash** (not full text); full text only at `full` level, which docs flag as potentially containing user data | Trace-content tests |
-| NFR-7.5 | P1 | Audit integrity: promotion records and revision history are append-only with content hashes chained (tamper-evident); verification tool included | Loop tests: tamper with a record, verifier detects |
+| NFR-7.5 | P1 | Audit integrity: promotion records and revision history live in StrataDB's **natively hash-chained**, append-only, sequence-numbered event log (FR-10.9) — tamper evidence from the substrate; Symbolica's verifier checks Strata's chain | Loop tests: tamper with a record, verifier detects |
 | NFR-7.6 | P1 | Static analysis security gates in CI: bandit (or semgrep ruleset) clean; CodeQL enabled on the repo | CI config |
+| NFR-7.7 | P1 | Least privilege for audit: governor/audit tooling opens the database read-only (`Strata.open(..., read_only=True)`); only the engine/loop write paths hold writable handles | Code review + loop tests |
 
 ## NFR-8 — Observability & Operability
 
@@ -109,7 +110,7 @@ from user-controlled conversations); the host process is trusted.
 | NFR-8.1 | P0 | Library silence: Symbolica never writes to stdout/stderr; logging via `logging` with `NullHandler` — zero output unless the host configures it. All diagnostic information flows through results, never side-channel logs | Test: capture streams across the conformance suite, assert empty |
 | NFR-8.2 | P0 | Telemetry is pull-shaped and non-blocking: the `Telemetry` sink is called synchronously with a bounded-size record; a slow or raising sink cannot fail or slow `reason()` beyond a documented bound (sink exceptions are swallowed to a dead-letter counter) | Fault-injection test on the sink |
 | NFR-8.3 | P1 | OpenTelemetry compatibility: `trace_id`/`span_id` are W3C trace-context compliant; an OTel host can pass its context in so engine decisions appear as spans of the host trace | Integration test with the OTel SDK |
-| NFR-8.4 | P1 | Coverage observable out of the box: the bundled JSONL telemetry sink computes coverage/precision aggregates with a one-line helper — no external stack required to see the north-star metric | Loop tests |
+| NFR-8.4 | P1 | Coverage observable out of the box: the bundled StrataDB telemetry sink (event log, FR-10.9) computes coverage/precision aggregates with a one-line helper — no external stack required to see the north-star metric | Loop tests |
 
 ## NFR-9 — Privacy & Data Handling
 
@@ -119,7 +120,7 @@ Facts and cases routinely contain end-user PII (conversations, orders, identitie
 |---|---|---|---|
 | NFR-9.1 | P1 | Field masking: hosts can declare fact paths as masked; masked values appear as `"<masked>"` in traces, telemetry, and recorded cases, with the masked paths listed (OPA `erased`/`masked` precedent). Masking happens before any persistence | Conformance: masked field never appears in any serialized artifact. *Implies a functional addition — proposed as FR-8.4 at next PRD revision* |
 | NFR-9.2 | P1 | Engine and loop perform no network transmission of facts/cases/traces except (a) configured L1 provider calls and (b) host-configured sinks. No telemetry-home, ever | Code review + socket-monitoring test in CI |
-| NFR-9.3 | P2 | Case-store retention hooks: the store interface supports delete-by-case-id and delete-by-predicate (GDPR-style erasure); the bundled JSONL store implements both. Distilled *rules* derived from erased cases persist (documented position: rules are aggregates; provenance case-references may dangle and the verifier reports them) | Store contract tests |
+| NFR-9.3 | P2 | Case-store retention hooks: the store interface supports delete-by-case-id and delete-by-predicate (GDPR-style erasure); the bundled StrataDB store implements both. Distilled *rules* derived from erased cases persist (documented position: rules are aggregates; provenance case-references may dangle and the verifier reports them) | Store contract tests |
 
 ## NFR-10 — Developer Experience & Documentation
 

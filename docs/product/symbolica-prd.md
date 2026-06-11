@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Status | **Source of truth** — supersedes prior docs for scope; design docs remain as rationale |
-| Version | 1.3 (2026-06-11) — v1.1: policy-distillation direction; v1.2: `symbolica-user-flows.md` gaps; v1.3: NFRs elaborated in `symbolica-nfr.md`, adds FR-8.4 (masking) + OQ-7 |
+| Version | 1.5 (2026-06-11) — v1.1: policy-distillation direction; v1.2: `symbolica-user-flows.md` gaps; v1.3: NFRs in `symbolica-nfr.md`, FR-8.4 + OQ-7; v1.4: StrataDB data layer (FR-10.9); v1.5: StrataDB leverage — time travel, semantic dedup/gap-clustering (FR-14.9/14.10), strata-inference OQ-8 |
 | Owner | anibjoshi |
 | Related | `symbolica-user-flows.md` (personas & flows), `symbolica-nfr.md` (detailed NFRs + verification), `symbolica-rebuild-design.md` (architecture rationale), `symbolica-research-synthesis.md` (evidence), `symbolica-correctness-bugs.md` (v1 failure catalog), `symbolica-as-is-analysis.md` (v1 baseline) |
 
@@ -285,7 +285,8 @@ for `MISSING_FACT`, via edit distance). Diagnostic quality is tested like a feat
 Initial code registry: `SCHEMA_VIOLATION, DUPLICATE_RULE_ID, UNKNOWN_AFTER_TARGET,
 AFTER_CYCLE, EMIT_CONFLICT, SHADOWED_RULE, UNREACHABLE_RULE, BAD_EXPRESSION_SYNTAX,
 FORBIDDEN_CONSTRUCT, UNKNOWN_FUNCTION, RESERVED_NAME, TYPE_MISMATCH, MISSING_FACT,
-DIVISION_BY_ZERO, LIMIT_EXCEEDED, BUDGET_EXCEEDED, NOT_CONVERGED, EMIT_NOT_ALLOWED`.
+DIVISION_BY_ZERO, LIMIT_EXCEEDED, BUDGET_EXCEEDED, NOT_CONVERGED, EMIT_NOT_ALLOWED,
+NEAR_DUPLICATE_RULE` (loop layer, FR-14.9).
 
 ### FR-9.2 (P0) Load-time static analysis
 On `compile()`: schema validation; id/`after`/cycle checks; **emit-conflict analysis**
@@ -335,7 +336,7 @@ safety is not a control surface.)*
 (agent|human|rules), timestamp, meta}` — the unit of recorded experience that
 distillation and `simulate()` both consume (FR-10.3's cases are this type). The core
 ships a `Recorder` utility: `record(facts, decision, *, outcome=None, source=...)`
-appending to a pluggable case store (JSONL file store built in). When a `reason()` call
+appending to a pluggable case store (bundled backend: StrataDB, FR-10.9). When a `reason()` call
 is uncovered (`covered == False`), the host records the agent's fallback decision as a
 case — this is **observation mode**, and it must work with an empty ruleset (a
 zero-rule engine is valid, returns empty verdicts, and reports `covered=False`).
@@ -345,6 +346,22 @@ zero-rule engine is valid, returns empty verdicts, and reports `covered=False`).
 from usage) referenced by the ruleset — the host uses it to drive fact extraction
 (e.g., as a structured-output schema for an extractor LLM), and the loop layer uses it
 to detect rules referencing facts no extractor produces.
+
+### FR-10.9 (P0) Data layer — StrataDB
+All persistent state — cases, telemetry, ruleset revisions, promotion/audit records,
+L1 response cache/replay, temporal series, undistillable batches — is stored in
+**StrataDB** (embedded, in-process) via a single storage module; the store *protocols*
+(CaseStore, Telemetry, …) remain the API and StrataDB is the bundled backend. Candidate
+rulesets are isolated on StrataDB **branches** during simulation (FR-14.4); promotion
+is a transactional audit-append + **CAS** swap of the active-ruleset state cell
+(FR-14.5, FR-14.8, NFR-6.5); audit records ride the append-only event log (NFR-7.5).
+Hosts may pass the same `Strata` instance their agent uses for memory, or a dedicated
+path; in-memory mode (`Strata.cache()`) supports tests and ephemeral deployments. The
+evaluation path performs no storage I/O regardless (AD-14). StrataDB **time-travel
+snapshots** (`db.at(t)`) back audit and incident flows: any decision is investigable
+against the full data state at its timestamp — active ruleset, cases, telemetry — not
+just its own trace. Primitive mapping and decisions AD-14…AD-20:
+`docs/architecture/symbolica-architecture.md` §11.
 
 ## 11. Function Registry
 
@@ -374,8 +391,10 @@ exception-safe; a raising function produces a `Diagnostic`, not a crash.
 
 ## 13. L2 — Temporal Layer — P1
 
-- **FR-13.1** Event-time series store (port of v1 `TemporalStore`: bounded deques, TTL
-  facts, RLock) with explicit timestamps; one bounded-lateness parameter.
+- **FR-13.1** Event-time series store backed by the data layer (FR-10.9: one StrataDB
+  event-log stream per metric; v1 `TemporalStore`'s windowing semantics carried over,
+  its ad-hoc deque storage retired) with explicit timestamps, TTL facts, and one
+  bounded-lateness parameter.
 - **FR-13.2** Window functions: `recent_avg/min/max/count(key, duration)` over
   event-time sliding windows.
 - **FR-13.3** `sustained(key, predicate, duration, max_gap)` — true iff the predicate
@@ -421,6 +440,15 @@ consumes only public engine APIs (§10), and implements the distill/govern loops
   promotion path that is. Approval policy may still require a governor confirmation;
   the disabled rule's triggering case is auto-queued for distillation as a
   counter-example.
+- **FR-14.9 (P1) Semantic near-duplicate detection**: at validate time, each candidate
+  rule is vector-searched (FR-10.9 auto-embed) against the active ruleset; similarity
+  above a threshold yields a `NEAR_DUPLICATE_RULE` warning diagnostic naming the
+  existing rule — steering the authoring agent to amend rather than add. Complements
+  the syntactic `SHADOWED_RULE` analysis (FR-9.2).
+- **FR-14.10 (P1) Coverage-gap clustering**: uncovered cases are embedded and
+  clustered; distillation batches target the largest clusters first, so authoring
+  effort tracks the biggest coverage gaps. Cluster summaries appear in loop telemetry
+  (which gap is growing, which was closed by the last promotion).
 
 The flagship acceptance demo (M5): wrap a tool-using agent in observation mode with
 zero rules, record N decisions, distill, repair to green in ≤3 round-trips, pass the
@@ -444,7 +472,7 @@ in CI does not count as met.
 | **NFR-1.3** (P0) | `compile()` of 1,000 rules < 1 s |
 | **NFR-2.1** (P0) | Thread-safe: concurrent `reason()` on one engine from any thread, identical results (regression for v1 bug #7). No `signal`, no thread-hostile or main-thread-only constructs |
 | **NFR-2.2** (P0) | Platform: Linux/macOS/Windows; CPython 3.10–3.13 |
-| **NFR-2.3** (P0) | Dependencies: core = stdlib + `jsonschema` only. L1 adds provider SDKs as extras (`symbolica[openai]`, `[anthropic]`). No PyYAML in core |
+| **NFR-2.3** (P0) | Dependencies: core = stdlib + `jsonschema` + `stratadb` (the data layer, FR-10.9; native wheels — the `symbolica` wheel itself stays pure-Python). L1 adds provider SDKs as extras (`symbolica[openai]`, `[anthropic]`). No PyYAML in core |
 | **NFR-2.4** (P0) | Sandboxing: no `eval`/`exec`, AST whitelist, no I/O or imports from expressions, resource limits per FR-6.6 |
 | **NFR-3.1** (P0) | CI (GitHub Actions) on every PR: ruff, mypy (strict), pytest matrix (3 OS × 4 Python), coverage ≥ 90% on core, conformance suite, benchmark regression check |
 | **NFR-3.2** (P0) | Conformance suite: every FR in §5–§11 has at least one table-driven golden test (rules + facts + expected verdict/fired/diagnostics) written **before** the implementing code; all 11 v1 bugs have named regression tests |
@@ -494,3 +522,8 @@ headline claim.
    that rules are aggregates and survive case erasure (with dangling provenance
    references reported by the verifier) — needs governor/legal sign-off before any
    deployment subject to GDPR-style erasure (owner: pre-M5).
+8. Should L1 route `PROMPT()` through **strata-inference** (StrataDB's inference
+   engine: local llama.cpp + cloud providers) instead of direct provider adapters
+   (FR-12.6)? Local small models would make cheap judgment leaves (classification,
+   routing) near-free and co-locate response caching with the replay store. Depends on
+   strata-inference maturity — decide before M6 (owner: M5 exit review).
