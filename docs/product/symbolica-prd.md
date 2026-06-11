@@ -285,8 +285,9 @@ for `MISSING_FACT`, via edit distance). Diagnostic quality is tested like a feat
 Initial code registry: `SCHEMA_VIOLATION, DUPLICATE_RULE_ID, UNKNOWN_AFTER_TARGET,
 AFTER_CYCLE, EMIT_CONFLICT, SHADOWED_RULE, UNREACHABLE_RULE, BAD_EXPRESSION_SYNTAX,
 FORBIDDEN_CONSTRUCT, UNKNOWN_FUNCTION, RESERVED_NAME, TYPE_MISMATCH, MISSING_FACT,
-DIVISION_BY_ZERO, LIMIT_EXCEEDED, BUDGET_EXCEEDED, NOT_CONVERGED, EMIT_NOT_ALLOWED,
-NEAR_DUPLICATE_RULE` (loop layer, FR-14.9).
+DIVISION_BY_ZERO, FUNCTION_ERROR, LIMIT_EXCEEDED, BUDGET_EXCEEDED, NOT_CONVERGED,
+EMIT_NOT_ALLOWED, NEAR_DUPLICATE_RULE` (loop layer, FR-14.9). Normative payloads and
+message templates: `docs/architecture/symbolica-spec.md` §S-5.
 
 ### FR-9.2 (P0) Load-time static analysis
 On `compile()`: schema validation; id/`after`/cycle checks; **emit-conflict analysis**
