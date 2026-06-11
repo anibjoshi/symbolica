@@ -2,9 +2,9 @@
 
 *Clean-break rebuild. Core first (rules, expressions, chaining, explainability); LLM,
 temporal, and backward chaining follow as separate increments. Built in place on a
-long-lived branch; `main` keeps v1 until parity. Companion docs: `AS_IS_ANALYSIS.md`
-(what exists), `CORRECTNESS_BUGS.md` (what must never happen again),
-`RESEARCH_SYNTHESIS.md` (industry/academic research → decisions; updated 2026-06-11 —
+long-lived branch; `main` keeps v1 until parity. Companion docs: `symbolica-as-is-analysis.md`
+(what exists), `symbolica-correctness-bugs.md` (what must never happen again),
+`symbolica-research-synthesis.md` (industry/academic research → decisions; updated 2026-06-11 —
 this design incorporates its outcomes).*
 
 ---
@@ -70,9 +70,9 @@ Decisions, mapped to the v1 bug they eliminate:
 | **Priority & conflicts** | Execution order = dependency order, then priority (high first), then document order — fully deterministic. When multiple fired rules `emit` the same key, **highest priority wins**; equal priority on the same key is a load-time validation error unless the rules are mutually exclusive by `after` chains. | #8 |
 | **Chaining** | `after: [rule_ids]` on the *dependent* rule: it is not eligible until all listed rules have fired (an `after_any` variant covers OR). This actually gates execution. v1's `triggers` (annotation on the antecedent, gating nothing) is gone. | #9 |
 | **`enabled: false`** | Excluded at load time; never evaluated, reported in `engine.skipped_rules`. | #10 |
-| **Missing facts** | Referencing an undefined fact yields a structured `MISSING_FACT` diagnostic (rule id, expression, JSON-path to the missing name); the rule does not fire, the run continues, and the trace marks the missing read distinctly — it is **never** coerced to false. Deliberate tolerance is explicit: `default(credit_score, 0)` / `has(credit_score)`. `strict=True` raises. *(CEL-style; chosen over Rego-style silent undefined because the harness repair loop consumes diagnostics — see RESEARCH_SYNTHESIS §1.)* | #11 |
+| **Missing facts** | Referencing an undefined fact yields a structured `MISSING_FACT` diagnostic (rule id, expression, JSON-path to the missing name); the rule does not fire, the run continues, and the trace marks the missing read distinctly — it is **never** coerced to false. Deliberate tolerance is explicit: `default(credit_score, 0)` / `has(credit_score)`. `strict=True` raises. *(CEL-style; chosen over Rego-style silent undefined because the harness repair loop consumes diagnostics — see symbolica-research-synthesis.md §1.)* | #11 |
 | **No implicit coercion** | Cross-type comparison (`1 == "1"`) is a type diagnostic, never a boolean (CEL's rule — coercion is "a common source of bugs"). Type coercion exists in exactly one place: explicit typed `PROMPT()` returns. | #1-class |
-| **Schema** | One source of truth: a versioned JSON Schema (draft 2020-12) shipped in the package and enforced at load. The hand-rolled validator stack is gone; only semantic checks (duplicate ids, unknown `after` targets, conflict analysis, cycles) remain in code. | AS-IS §10.7 |
+| **Schema** | One source of truth: a versioned JSON Schema (draft 2020-12) shipped in the package and enforced at load. The hand-rolled validator stack is gone; only semantic checks (duplicate ids, unknown `after` targets, conflict analysis, cycles) remain in code. | symbolica-as-is-analysis.md §10.7 |
 
 Expression language: same scope as v1 (boolean/comparison/arithmetic/membership on
 names, constants, lists, subscripts, registered function calls) — that part was sound.
@@ -110,7 +110,7 @@ Key mechanics:
   evaluation**: within `and`/`or`, cheap symbolic predicates evaluate before expensive
   leaves, so an LLM `PROMPT()` leaf is reached only when it can still change the
   outcome. A per-evaluation budget ceiling returns a structured `BUDGET_EXCEEDED`
-  diagnostic instead of blocking. (No Rete — see RESEARCH_SYNTHESIS §2 for the evidence
+  diagnostic instead of blocking. (No Rete — see symbolica-research-synthesis.md §2 for the evidence
   and the recorded reversal thresholds.) The dependency DAG and execution order skeleton are computed
   here. Load fails loudly on any violation. The Engine and everything in it is immutable
   afterward — "add a rule" means building a new engine from `ruleset.with_rule(r)`,
@@ -135,7 +135,7 @@ Key mechanics:
    staged for the verdict. A rule fires **at most once per run** — by spec, a rule whose
    inputs change *after* it fired does not re-fire within the run (fact-version
    refraction was considered and rejected for v2: implicit re-fire is invisible control
-   flow machine authors can't reason about; see RESEARCH_SYNTHESIS §2).
+   flow machine authors can't reason about; see symbolica-research-synthesis.md §2).
 4. An evaluation error means the rule **did not fire** (it is *not* in `fired`), and a
    structured `RuleError {rule_id, phase, expression, error}` is appended to
    `result.errors`. `set`/`emit` application is **all-or-nothing per rule**: values are
@@ -203,7 +203,7 @@ This adjusts the design above as follows:
    doc of the schema for authoring agents. *(Research resolved the expression-encoding
    question: keep in-string `"= expr"` marked expressions — LLMs emit familiar
    Python-like code far more reliably than JsonLogic-style ASTs or structured
-   expression objects; see RESEARCH_SYNTHESIS §2.)*
+   expression objects; see symbolica-research-synthesis.md §2.)*
 2. **Diagnostics are a first-class API.** Every validation/compile failure returns a
    structured diagnostic — JSON-path to the offending element, error code, message, and
    where possible a suggested fix — designed for an automated repair loop, not a stack

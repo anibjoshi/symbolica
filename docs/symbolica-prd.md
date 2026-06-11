@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | Status | **Source of truth** — supersedes prior docs for scope; design docs remain as rationale |
-| Version | 1.3 (2026-06-11) — v1.1: policy-distillation direction; v1.2: `USER_FLOWS.md` gaps; v1.3: NFRs elaborated in `NFR.md`, adds FR-8.4 (masking) + OQ-7 |
+| Version | 1.3 (2026-06-11) — v1.1: policy-distillation direction; v1.2: `symbolica-user-flows.md` gaps; v1.3: NFRs elaborated in `symbolica-nfr.md`, adds FR-8.4 (masking) + OQ-7 |
 | Owner | anibjoshi |
-| Related | `USER_FLOWS.md` (personas & flows), `NFR.md` (detailed NFRs + verification), `REBUILD_DESIGN.md` (architecture rationale), `RESEARCH_SYNTHESIS.md` (evidence), `CORRECTNESS_BUGS.md` (v1 failure catalog), `AS_IS_ANALYSIS.md` (v1 baseline) |
+| Related | `symbolica-user-flows.md` (personas & flows), `symbolica-nfr.md` (detailed NFRs + verification), `symbolica-rebuild-design.md` (architecture rationale), `symbolica-research-synthesis.md` (evidence), `symbolica-correctness-bugs.md` (v1 failure catalog), `symbolica-as-is-analysis.md` (v1 baseline) |
 
 Requirement IDs (`FR-x.y`, `NFR-x.y`) are stable and referenced by conformance tests,
 issues, and PRs. Priorities: **P0** = required for v2 core release; **P1** = required
@@ -63,7 +63,7 @@ and (c) an agent-authored-ruleset lifecycle.** That intersection is Symbolica.
 v1 had 11 confirmed silent-wrong-answer defect classes rooted in *undefined semantics*
 (heuristic expression detection, diff-based verdicts, swallowed errors, double
 evaluation by divergent evaluators, cosmetic triggers, dead `enabled`, thread-fatal
-timeouts — see `CORRECTNESS_BUGS.md`). The v1 test suite pinned the buggy behavior.
+timeouts — see `symbolica-correctness-bugs.md`). The v1 test suite pinned the buggy behavior.
 v2 is specified first, tested against the spec, then implemented.
 
 ## 2. Users
@@ -152,7 +152,7 @@ In `set`/`emit`, every JSON value is a **literal** unless it is a string startin
 containing `{= ... }`, which marks an **interpolated template**. A literal string that
 must begin with `=` is escaped as `==`. There is no other inference of any kind.
 *(Rationale: kills the entire v1 bug class #1–#3; in-string marked expressions are the
-most reliably LLM-emitted encoding — RESEARCH_SYNTHESIS §2.)*
+most reliably LLM-emitted encoding — symbolica-research-synthesis.md §2.)*
 
 ### FR-5.5 (P1) YAML is a derived, human-review projection only
 The engine may *render* a ruleset to YAML for human review. YAML is never the stored or
@@ -184,14 +184,14 @@ them or each other.
 ### FR-6.3 (P0) Type discipline — no implicit coercion
 Cross-type comparison or arithmetic (`1 == "1"`, `"a" < 2`) yields a `TYPE_MISMATCH`
 diagnostic, never a boolean. `==`/`!=` between identical types only; int and float are
-mutually comparable; `null` equals only `null`. *(CEL's rule — RESEARCH_SYNTHESIS §3.1.)*
+mutually comparable; `null` equals only `null`. *(CEL's rule — symbolica-research-synthesis.md §3.1.)*
 
 ### FR-6.4 (P0) Missing-data semantics
 Referencing an undefined fact yields a `MISSING_FACT` diagnostic carrying rule id,
 expression, and the missing name; the enclosing rule does not fire; the run continues;
 the trace marks the missing read distinctly. A missing fact is **never** coerced to
 false/null. Explicit tolerance: `has(f)` and `default(f, x)`. `strict=True` on
-`reason()` raises on the first diagnostic. *(Decision record: RESEARCH_SYNTHESIS §1.)*
+`reason()` raises on the first diagnostic. *(Decision record: symbolica-research-synthesis.md §1.)*
 
 ### FR-6.5 (P0) Short-circuit + cost-ordered evaluation
 `and`/`any`/`all`/`or` short-circuit. Within a boolean group, the engine may reorder
@@ -217,7 +217,7 @@ canonical order (FR-7.5). Run ends when a pass fires nothing, or at `max_passes`
 
 ### FR-7.3 (P0) Fire-once
 A rule fires at most once per run. By spec, changed inputs after firing do not re-fire
-a rule within the same run. *(Refraction rejected — RESEARCH_SYNTHESIS §2.)*
+a rule within the same run. *(Refraction rejected — symbolica-research-synthesis.md §2.)*
 
 ### FR-7.4 (P0) Eligibility
 Eligible = `enabled` ∧ not yet fired ∧ all `after` antecedents fired (`after_any`: ≥1).
@@ -431,7 +431,7 @@ cost/latency reduction per covered decision.
 
 ## 15. Non-Functional Requirements
 
-The table below is the P0 summary. **`NFR.md` is the normative elaboration**: it
+The table below is the P0 summary. **`symbolica-nfr.md` is the normative elaboration**: it
 extends these families, adds families NFR-5 (determinism & reproducibility), NFR-6
 (reliability), NFR-7 (security), NFR-8 (observability), NFR-9 (privacy), NFR-10 (DX),
 and binds every NFR to a committed verification method. An NFR without a verification
@@ -453,7 +453,7 @@ in CI does not count as met.
 
 ## 16. Out of Scope (non-goals for v2)
 
-- Rete/incremental matching and truth maintenance (reversal thresholds recorded in RESEARCH_SYNTHESIS §2)
+- Rete/incremental matching and truth maintenance (reversal thresholds recorded in symbolica-research-synthesis.md §2)
 - Backward chaining / goal seeking (L3, unscheduled; v1's was never functional)
 - A rules server, REST API, or UI; multi-tenant ruleset storage
 - Human-authoring conveniences (YAML input, `if/then` aliases) beyond the YAML review projection
@@ -476,7 +476,7 @@ in CI does not count as met.
 
 **The engine ships** (`2.0.0a1`, M4) when its exit criteria hold, CI is green on the
 full matrix, and a side-by-side run shows v2 producing correct answers on every case
-from `CORRECTNESS_BUGS.md` where v1 produced wrong ones. **The product ships** (M5)
+from `symbolica-correctness-bugs.md` where v1 produced wrong ones. **The product ships** (M5)
 when the flagship loop demo passes — that demo, not the engine benchmarks, is the
 headline claim.
 
@@ -488,7 +488,7 @@ headline claim.
 4. Retry-and-vote default-off cost/benefit (L1).
 5. Async `reason()` (only relevant once L1 latency matters in async hosts).
 6. Minimum case volume before first distillation — placeholder heuristic is ~50 per
-   decision family (`USER_FLOWS.md` §5); calibrate empirically during the M5 flagship
+   decision family (`symbolica-user-flows.md` §5); calibrate empirically during the M5 flagship
    demo and replace the heuristic with a measured threshold (owner: M5 exit review).
 7. Privacy posture on rules distilled from erased cases: NFR-9.3 takes the position
    that rules are aggregates and survive case erasure (with dangling provenance

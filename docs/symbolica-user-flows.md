@@ -1,6 +1,6 @@
 # Symbolica v2 — User Flows
 
-*Companion to `PRD.md` (the source of truth for requirements). This document describes
+*Companion to `symbolica-prd.md` (the source of truth for requirements). This document describes
 how each persona onboards, works day-to-day, and troubleshoots. API names follow the
 PRD; where a flow implies a requirement not yet in the PRD, it is marked **[gap]**.*
 

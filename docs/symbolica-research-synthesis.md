@@ -2,7 +2,7 @@
 
 *Reconciles the two research reports (`symbolica-rule-engine-research.md`,
 `symbolica-deep-research-agent-authored.md`) and records the resulting design decisions.
-2026-06-11. Each decision below is reflected in `REBUILD_DESIGN.md`.*
+2026-06-11. Each decision below is reflected in `symbolica-rebuild-design.md`.*
 
 ---
 
@@ -21,7 +21,7 @@
 1. The two positions converge operationally — in both, the rule does not fire. The
    difference is whether the non-firing is *recorded as a diagnostic* or *silent*. v1's
    single worst defect class was silent non-firing (typo'd field → no fire, no signal,
-   CORRECTNESS_BUGS #11). Rego's undefined-propagation reproduces that failure mode.
+   symbolica-correctness-bugs.md #11). Rego's undefined-propagation reproduces that failure mode.
 2. Report 1's own stated threshold cuts our way once authorship is agentic: the harness
    repair loop *consumes* errors as its feedback signal. A missing-fact diagnostic with
    rule id + JSON-path is exactly what the authoring agent needs to add a `default()` or

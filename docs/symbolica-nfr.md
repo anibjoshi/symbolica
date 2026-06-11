@@ -1,6 +1,6 @@
 # Symbolica v2 — Non-Functional Requirements (Detailed)
 
-*Normative elaboration of `PRD.md` §15. IDs NFR-1.x–NFR-4.x extend the families already
+*Normative elaboration of `symbolica-prd.md` §15. IDs NFR-1.x–NFR-4.x extend the families already
 committed in the PRD (existing IDs unchanged); families NFR-5–NFR-10 are introduced
 here. Every NFR has a **verification** — the test, benchmark, or check that proves it.
 An NFR without a committed verification does not count as met.*
@@ -125,7 +125,7 @@ Facts and cases routinely contain end-user PII (conversations, orders, identitie
 
 | ID | Pri | Requirement | Verification |
 |---|---|---|---|
-| NFR-10.1 | P0 | Time-to-observation-mode < 1 hour for a developer new to Symbolica, following the quickstart (which is ≤ 30 lines of code, per `USER_FLOWS.md` §1.1) | Doc walkthrough executed in CI (quickstart is a tested script); at least one human run before 2.0 |
+| NFR-10.1 | P0 | Time-to-observation-mode < 1 hour for a developer new to Symbolica, following the quickstart (which is ≤ 30 lines of code, per `symbolica-user-flows.md` §1.1) | Doc walkthrough executed in CI (quickstart is a tested script); at least one human run before 2.0 |
 | NFR-10.2 | P0 | The `llms.txt` authoring guide (FR-5.6) is itself conformance-tested: every example in it compiles clean, and its diagnostic catalog stays in sync with the FR-9.1 registry (generated, not hand-maintained) | CI doc-test job |
 | NFR-10.3 | P1 | Every public API has a docstring with a runnable example; doctests run in CI | CI |
 | NFR-10.4 | P1 | Error-message style: one sentence, names the thing (quoted), states the constraint, points at the fix — enforced by the golden-diagnostic tests (NFR-3.4) | Conformance |

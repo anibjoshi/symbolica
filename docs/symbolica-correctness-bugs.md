@@ -131,7 +131,7 @@ trace is a Python `logging` warning.
 
 ## 12. 🟡 Additional hazards verified in source (not probed)
 
-- **Backward chaining API crashes** (`Goal` has no `.field`) — see AS_IS_ANALYSIS §10.1;
+- **Backward chaining API crashes** (`Goal` has no `.field`) — see symbolica-as-is-analysis.md §10.1;
   `examples/06` is broken.
 - **`PROMPT()` bool coercion defaults to `False`** on any unrecognized response, and
   int/float coercion regex-extracts the *first* number from prose
