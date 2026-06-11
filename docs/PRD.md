@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | Status | **Source of truth** — supersedes prior docs for scope; design docs remain as rationale |
-| Version | 1.2 (2026-06-11) — v1.1 committed fully to the policy-distillation direction; v1.2 folds in gaps surfaced by `USER_FLOWS.md` (FR-14.1, FR-14.3, FR-14.8, OQ-6) |
+| Version | 1.3 (2026-06-11) — v1.1: policy-distillation direction; v1.2: `USER_FLOWS.md` gaps; v1.3: NFRs elaborated in `NFR.md`, adds FR-8.4 (masking) + OQ-7 |
 | Owner | anibjoshi |
-| Related | `USER_FLOWS.md` (personas & flows), `REBUILD_DESIGN.md` (architecture rationale), `RESEARCH_SYNTHESIS.md` (evidence), `CORRECTNESS_BUGS.md` (v1 failure catalog), `AS_IS_ANALYSIS.md` (v1 baseline) |
+| Related | `USER_FLOWS.md` (personas & flows), `NFR.md` (detailed NFRs + verification), `REBUILD_DESIGN.md` (architecture rationale), `RESEARCH_SYNTHESIS.md` (evidence), `CORRECTNESS_BUGS.md` (v1 failure catalog), `AS_IS_ANALYSIS.md` (v1 baseline) |
 
 Requirement IDs (`FR-x.y`, `NFR-x.y`) are stable and referenced by conformance tests,
 issues, and PRs. Priorities: **P0** = required for v2 core release; **P1** = required
@@ -266,6 +266,12 @@ that would have flipped it. `result.near_misses(n)` ranks non-fired rules by fra
 of satisfied conditions. *(ECOA/FICO ranked-reasons model; doubles as the harness
 repair signal.)*
 
+### FR-8.4 (P1) Field masking
+Hosts can declare fact paths as masked. Masked values are replaced with `"<masked>"`
+in traces, telemetry records, and recorded cases — before any persistence or sink —
+with the masked paths listed in the artifact (OPA `erased`/`masked` precedent).
+Masking never affects evaluation, only serialization. *(See NFR-9.1.)*
+
 ## 9. Diagnostics & Static Analysis
 
 ### FR-9.1 (P0) Diagnostic object
@@ -425,6 +431,12 @@ cost/latency reduction per covered decision.
 
 ## 15. Non-Functional Requirements
 
+The table below is the P0 summary. **`NFR.md` is the normative elaboration**: it
+extends these families, adds families NFR-5 (determinism & reproducibility), NFR-6
+(reliability), NFR-7 (security), NFR-8 (observability), NFR-9 (privacy), NFR-10 (DX),
+and binds every NFR to a committed verification method. An NFR without a verification
+in CI does not count as met.
+
 | ID | Requirement |
 |---|---|
 | **NFR-1.1** (P0) | Pure-symbolic `reason()` p50 < 1 ms, p99 < 5 ms for 100-rule rulesets / ≤50 facts / warm engine, on a commodity x86-64 core; measured by a committed pytest-benchmark suite with the exact configuration published. No performance claims without a committed benchmark |
@@ -478,3 +490,7 @@ headline claim.
 6. Minimum case volume before first distillation — placeholder heuristic is ~50 per
    decision family (`USER_FLOWS.md` §5); calibrate empirically during the M5 flagship
    demo and replace the heuristic with a measured threshold (owner: M5 exit review).
+7. Privacy posture on rules distilled from erased cases: NFR-9.3 takes the position
+   that rules are aggregates and survive case erasure (with dangling provenance
+   references reported by the verifier) — needs governor/legal sign-off before any
+   deployment subject to GDPR-style erasure (owner: pre-M5).
