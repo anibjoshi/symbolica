@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | Status | **Source of truth** — supersedes prior docs for scope; design docs remain as rationale |
-| Version | 1.5 (2026-06-11) — v1.1: policy-distillation direction; v1.2: `symbolica-user-flows.md` gaps; v1.3: NFRs in `symbolica-nfr.md`, FR-8.4 + OQ-7; v1.4: StrataDB data layer (FR-10.9); v1.5: StrataDB leverage — time travel, semantic dedup/gap-clustering (FR-14.9/14.10), strata-inference OQ-8 |
+| Version | 1.6 (2026-06-11) — v1.4: StrataDB data layer; v1.5: StrataDB leverage (FR-14.9/14.10, OQ-8); v1.6: vision corrected (hybrid symbolic decision intelligence; policy layer; memory-graduation positioning), north star → quality-gated coverage, shadow mode into M5 (FR-14.7), Case severity, `symbolica-evaluation.md` |
 | Owner | anibjoshi |
-| Related | `symbolica-user-flows.md` (personas & flows), `symbolica-nfr.md` (detailed NFRs + verification), `symbolica-rebuild-design.md` (architecture rationale), `symbolica-research-synthesis.md` (evidence), `symbolica-correctness-bugs.md` (v1 failure catalog), `symbolica-as-is-analysis.md` (v1 baseline) |
+| Related | `symbolica-user-flows.md` (personas & flows), `symbolica-nfr.md` (detailed NFRs + verification), `symbolica-evaluation.md` (metrics & evaluation strategy), `symbolica-rebuild-design.md` (architecture rationale), `symbolica-research-synthesis.md` (evidence), `symbolica-correctness-bugs.md` (v1 failure catalog), `symbolica-as-is-analysis.md` (v1 baseline) |
 
 Requirement IDs (`FR-x.y`, `NFR-x.y`) are stable and referenced by conformance tests,
 issues, and PRs. Priorities: **P0** = required for v2 core release; **P1** = required
@@ -15,27 +15,45 @@ for the layer release it belongs to; **P2** = planned, not committed.
 
 ## 1. Product Vision
 
-**Symbolica is a memoization layer for agent cognition: it progressively converts an
-agent's expensive, stochastic judgment into cheap, deterministic, auditable policy —
-without a human writing rules.**
+**Symbolica is a hybrid symbolic decision intelligence system: a deterministic,
+explainable decision core that learns its rules from the agents it governs — and can
+consult a model *inside* a rule where narrow judgment is genuinely needed.**
 
-The product is a loop. An agent acts; its decisions are recorded as cases; an authoring
-agent distills cases into declarative rules; the engine compiles, verifies, and executes
+It is hybrid twice over. At **execution time**, neural leaves serve symbolic
+skeletons: rules are deterministic, but a condition can delegate one bounded judgment
+to an LLM under a determinism contract. At **authoring time**, the roles invert:
+agents write the rules, and the symbolic layer's verification — schema, static
+analysis, simulation against held-out cases, shadow comparison on live traffic — is
+what makes machine-authored policy safe to trust. The symbolic side contributes proof;
+the neural side contributes knowledge.
+
+In an agentic stack, Symbolica is **the policy layer**. Agents are how a system
+handles the novel; policy is how it handles the settled. The product is a loop: an
+agent acts; its decisions **and outcomes** are recorded as cases; an authoring agent
+distills cases into declarative rules; the engine compiles, verifies, and executes
 those rules deterministically — in microseconds, with machine-readable explanations —
-and every trace feeds the next round of distillation and repair. Rules can call an LLM
-*inside* a condition where narrow judgment is genuinely needed, under a determinism
-contract. Promotion is gated by simulation; humans govern by exception, not by authoring.
+and every trace feeds the next round of distillation and repair. Promotion is gated by
+evidence, so policy is not a recording of what the agent did but a **vetted
+improvement on it**. Humans govern by exception, not by authoring.
 
-In an agentic stack, the engine is the fixed point — the one component whose behavior
-can be proven, replayed, and governed. AI is what makes filling it with good rules cheap.
+The engine is the stack's fixed point — the one component whose behavior can be
+proven, replayed, and governed. AI is what makes filling it with good rules cheap.
 
 ### 1.0 North-star metric
 
-**Coverage**: the fraction of an agent's decisions handled by promoted rules (with the
-implied cost/latency reduction per covered decision). Secondary: distillation efficiency
-(repair round-trips to a promotable ruleset; target ≤3) and verdict precision vs
-recorded outcomes. Every surface in this PRD ultimately serves moving coverage up
-without losing precision.
+**Quality-gated coverage (QGC)**: the fraction of an agent's decisions handled by
+promoted rules **while the rolling quality gate is green** — non-inferiority of rule
+decisions versus the fallback baseline, severity-weighted, on the strongest available
+evidence (outcome joins > shadow comparisons > adjudicated samples). Coverage earned
+during a red gate counts as zero; new decision families count zero until the gate has
+sufficient data. *Raw coverage is explicitly rejected as the north star: it is
+improvable by promoting overly broad rules — i.e., by doing the job worse.*
+
+Secondary: net economics per covered decision (minus loop costs), distillation
+efficiency (≤3 repair round-trips), and rule survival rate. Honest expectation: mature
+deployments may settle at 30–60% QGC — the value claim rides on quality and
+governance per covered decision, not the raw percentage. Gate definition, metric
+hierarchy, and evaluation assets: `symbolica-evaluation.md`.
 
 ### 1.1 The three loops
 
@@ -58,6 +76,24 @@ shipping engine combines (a) LLM judgments as first-class typed, cost-accounted
 predicates inside declarative rules, (b) replayable, agent-consumable decision traces,
 and (c) an agent-authored-ruleset lifecycle.** That intersection is Symbolica.
 
+**Versus agentic memory** (the first question every adopter asks): memory changes what
+the model *knows*; Symbolica changes what the system *does*. A lesson in memory is
+advice to a stochastic reader — unenforced, unvetted, re-paid on every decision, and
+unmeasurable. The knowledge maturity ladder is *episodic memory → semantic lesson →
+tested rule → governed policy*: memory systems are the first two steps; **Symbolica is
+what a memory graduates into once it is load-bearing.** Most agent systems only ever
+need the first two steps — memory is horizontal. A system graduates when its decisions
+trip the **four triggers**: (1) repetition at volume (economics), (2) consequence —
+money, access, regulation (governance), (3) consistency obligations (determinism),
+(4) adversarial exposure (enforcement). That segment is narrower and worth far more
+per system.
+
+**Portfolio position:** StrataDB serves the horizontal market (memory for every
+agent); Symbolica serves the graduation (policy for load-bearing agents). They share
+one database, so the upgrade path is in place before it is needed: the cases and
+memories are already in StrataDB when the first incident or cost review triggers
+graduation — and graduation itself is one line of code (FR-14.1).
+
 ### 1.3 Why a clean break from v1
 
 v1 had 11 confirmed silent-wrong-answer defect classes rooted in *undefined semantics*
@@ -77,6 +113,11 @@ v2 is specified first, tested against the spec, then implemented.
 
 Humans do **not** hand-author rules in the primary workflow. Every format/API decision
 optimizes for "an LLM can emit and repair this reliably" over human ergonomics.
+
+**Who this is not for:** systems whose decisions never trip the four graduation
+triggers (§1.2) — purely creative, exploratory, or low-stakes agents — should use
+agentic memory alone. Symbolica's target is agents whose decisions are repeated,
+consequential, consistency-bound, or adversarial-exposed.
 
 ## 3. Product Principles
 
@@ -333,9 +374,12 @@ traced. Enforced by the engine at execution time, not by the harness. *(Prompt-l
 safety is not a control surface.)*
 
 ### FR-10.7 (P0) Case schema & recording
-`Case` is a core, versioned schema: `{case_id, facts, decision, outcome?, source
-(agent|human|rules), timestamp, meta}` — the unit of recorded experience that
-distillation and `simulate()` both consume (FR-10.3's cases are this type). The core
+`Case` is a core, versioned schema: `{case_id, facts, decision, outcome?, severity?,
+source (agent|human|rules), timestamp, meta}` — the unit of recorded experience that
+distillation and `simulate()` both consume (FR-10.3's cases are this type). `severity`
+(1–4, host-declared consequence class) weights all quality metrics; `outcome` backfill
+is a first-class loop activity — outcomes are what let policy exceed the judgment it
+was distilled from (`symbolica-evaluation.md` §7). The core
 ships a `Recorder` utility: `record(facts, decision, *, outcome=None, source=...)`
 appending to a pluggable case store (bundled backend: StrataDB, FR-10.9). When a `reason()` call
 is uncovered (`covered == False`), the host records the agent's fallback decision as a
@@ -432,8 +476,14 @@ consumes only public engine APIs (§10), and implements the distill/govern loops
 - **FR-14.6 (P1) Monitoring & retirement**: consumes telemetry (FR-10.5); per-rule
   helpful/harmful counters from outcomes; flags underperformers for re-distillation or
   retirement.
-- **FR-14.7 (P2) Canary / champion-challenger**: run candidate alongside active ruleset
-  on live traffic, compare verdicts, promote on parity.
+- **FR-14.7 (P1, M5) Shadow mode**: candidate (or probationary newly-promoted) rules
+  evaluate **silently** on live traffic — the engine computes their verdicts, the
+  agent still decides for real, paired comparisons accumulate as evaluation data
+  (`symbolica-evaluation.md` §5). Promotion of rules emitting approval-gated keys
+  **requires** shadow non-inferiority over a configured minimum sample; routine keys
+  may promote on simulation alone. Offline `simulate()` cannot answer live
+  non-inferiority — its cases were generated under the old policy. Canary rollout
+  (graduated *enforcement*) is the same machinery and stays P2.
 - **FR-14.8 (P0) Expedited revision (incident mitigation)**: a governed fast path to
   disable or demote a specific rule *now*: `ruleset.without_rule(id)` (or a priority
   demotion) + recompile + swap, recorded as a revision with provenance
@@ -451,10 +501,14 @@ consumes only public engine APIs (§10), and implements the distill/govern loops
   effort tracks the biggest coverage gaps. Cluster summaries appear in loop telemetry
   (which gap is growing, which was closed by the last promotion).
 
-The flagship acceptance demo (M5): wrap a tool-using agent in observation mode with
-zero rules, record N decisions, distill, repair to green in ≤3 round-trips, pass the
-simulation gate, promote — and show coverage > 50% on held-out cases with measured
-cost/latency reduction per covered decision.
+The flagship acceptance demo (M5) is a **graduation demo**: start from an agent
+already using agentic memory (StrataDB) on a benchmark decision domain; wrap it in
+observation mode; record decisions **and outcomes**; distill, repair to green in ≤3
+round-trips; pass the simulation **and shadow** gates; promote — and show
+quality-gated coverage > 50% on held-out and shadow data at non-inferior quality, with
+measured net cost/latency reduction. The companion **policy-recovery benchmarks**
+(hidden ground-truth ruleset, noisy generated cases, measure recovery fidelity and
+efficiency — `symbolica-evaluation.md` §6) ship with the repo and gate the release.
 
 ---
 
@@ -499,7 +553,7 @@ in CI does not count as met.
 | **M2** | Format + static analysis (parser, FR-9.2 analyzer) | FR-5.*, FR-9.* green incl. golden diagnostics |
 | **M3** | Runtime (executor, verdict, traces, why-not, lifecycle APIs) | FR-7/8/10/11 green; all 11 v1 regression tests green |
 | **M4** | Benchmarks + examples + docs; `2.0.0a1` on the `v2-rebuild` branch | NFR-1.* met and published; `llms.txt` authored; example corpus rewritten |
-| **M5** | **Loop v0** (observation mode, distillation, repair, simulation gate, promotion) | FR-14.1–14.5 green; **flagship demo** (§14): zero rules → recorded cases → distilled, repaired ≤3 round-trips, promoted; coverage > 50% on held-out cases with measured cost/latency savings |
+| **M5** | **Loop v0** (observation mode, distillation, repair, simulation gate, **shadow mode**, promotion) | FR-14.1–14.5 + 14.7 green; **graduation demo** (§14): memory-using agent → observation → distill/repair ≤3 round-trips → simulation + shadow gates → promoted; QGC > 50% at non-inferior quality, net savings measured; policy-recovery benchmarks published; gate defaults (δ, n, w) + OQ-6 calibrated |
 | **M6** | L1 LLM layer | FR-12.* green incl. record/replay determinism test |
 | **M7** | L2 temporal; loop monitoring/retirement | FR-13.*, FR-14.6 |
 

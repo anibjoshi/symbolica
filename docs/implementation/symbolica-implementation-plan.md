@@ -121,11 +121,13 @@ v2 correct on every `symbolica-correctness-bugs.md` case.
 | **E5.2 Distillation** | `distill()`: authoring-contract assembly (schema + llms.txt + live context), structured-output candidate generation | FR-14.2 | L |
 | **E5.3 Repair loop** | Diagnostic-driven repair ≤3 round-trips; budget-exhaustion → undistillable escalation; `NEAR_DUPLICATE_RULE` via vector search | FR-14.3/14.9 | M |
 | **E5.4 Gate & promotion** | Branch-per-candidate (AD-16), simulation gate, CAS promotion + approval policy + expedited revision (AD-17), provenance stamping | FR-14.4/14.5/14.8, AD-16/17 | L |
-| **E5.5 Gap clustering & coverage** | Uncovered-case embedding/clustering for distillation targeting; coverage/cluster telemetry | FR-14.10, NFR-8.4 | M |
-| **E5.6 Flagship demo** | The §14 acceptance demo as a reproducible script + report; calibrates OQ-6 (case-volume threshold); OQ-8 decision input (strata-inference) | PRD §14/§17 M5 | M |
+| **E5.5 Gap clustering & coverage** | Uncovered-case embedding/clustering for distillation targeting; QGC computation + quality-gate state in loop telemetry | FR-14.10, NFR-8.4, eval §2/§3 | M |
+| **E5.6 Shadow mode** | Silent candidate evaluation on live traffic; paired comparisons; shadow non-inferiority gate for approval-gated keys; golden-set mechanism (adjudication sampling) | FR-14.7, eval §4.2/§5 | L |
+| **E5.7 Graduation demo & platform evals** | The §14 graduation demo (memory-using agent → promoted policy) as a reproducible script + report; **policy-recovery benchmark suite** (hidden ground-truth ruleset, noisy cases, fidelity/efficiency/robustness); calibrates gate defaults (δ, n, w), OQ-6; OQ-8 decision input | PRD §14/§17 M5, eval §6 | L |
 
-**Exit (the product ships):** flagship demo passes — coverage >50% on held-out cases,
-≤3 repair round-trips, measured cost/latency savings.
+**Exit (the product ships):** graduation demo passes — QGC >50% at non-inferior
+quality (simulation + shadow gates), ≤3 repair round-trips, net cost/latency savings
+measured; policy-recovery benchmarks published and regression-gated.
 
 ### M6 — L1 LLM Layer
 
@@ -142,7 +144,7 @@ v2 correct on every `symbolica-correctness-bugs.md` case.
 |---|---|---|---|
 | **E7.1 Temporal functions** | Event-log-backed series; `recent_*` windows; rigorous `sustained(max_gap)`; bounded lateness | FR-13.* | M |
 | **E7.2 Monitoring & retirement** | Helpful/harmful counters from outcomes; underperformer flagging → re-distillation queue | FR-14.6 | M |
-| *(backlog)* | Canary/champion-challenger (FR-14.7, P2); event projections & graph provenance when StrataDB lands them (watch list) | FR-14.7 | — |
+| *(backlog)* | Canary rollout — graduated *enforcement* on the shadow machinery (P2); event projections & graph provenance when StrataDB lands them (watch list) | — | — |
 
 ---
 

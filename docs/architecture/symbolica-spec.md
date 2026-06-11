@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Status | **Normative** — conformance tests derive from this document |
-| Version | 1.0 (2026-06-11) |
+| Version | 1.1 (2026-06-11) — adds Case `severity` (SD-17) |
 | Upstream | `docs/product/symbolica-prd.md` v1.5 (requirements), `docs/architecture/symbolica-architecture.md` v1.2 (structure) |
 | Audience | Implementers and the conformance suite. Two implementers working from this spec alone must produce engines that pass each other's golden tests |
 
@@ -369,6 +369,8 @@ The `llms.txt` diagnostic table is generated from this catalog (NFR-10.2).
     "decision":     {"type": "object"},
     "outcome":      {"type": ["object", "null"],
                      "description": "delayed ground truth; null until known"},
+    "severity":     {"type": ["integer", "null"], "minimum": 1, "maximum": 4,
+                     "description": "host-declared consequence class; 4 = critical"},
     "source":       {"enum": ["agent", "human", "rules"]},
     "timestamp":    {"type": "string", "format": "date-time"},
     "masked_paths": {"type": "array", "items": {"type": "string"}},
@@ -487,6 +489,7 @@ eq: "==literal"}`, facts `{}` → `verdict = {msg: "Hi FRIEND", eq: "=literal"}`
 | SD-14 | Field-dependency cycles legal via SCC condensation; `after` edges join the dependency graph | S-4.1 |
 | SD-15 | Error-erroring rules re-evaluate next pass (dedup'd diagnostics); failed-application rules never retry | S-4.2 |
 | SD-16 | `emit` is verdict-only — never readable by other rules; `set` is the sole inter-rule channel | S-4.3 |
+| SD-17 | Case carries optional `severity` (1–4); weights quality metrics per `symbolica-evaluation.md` | S-6 |
 
 ## S-11. Conformance
 
